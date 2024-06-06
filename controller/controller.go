@@ -24,11 +24,6 @@ type (
 		logger   *log.Logger
 		database database.Database
 	}
-
-	ResultStatus struct {
-		Status string `json:"status"`
-		Error  string `json:"error,omitempty"`
-	}
 )
 
 func NewApiServer(logger *log.Logger) error {
@@ -42,8 +37,8 @@ func NewApiServer(logger *log.Logger) error {
 	}
 	apiServer.database = newDB
 
-	routes.HandleFunc("/create-new-project/", apiServer.CreateNewProject).Methods(http.MethodPost)
-
+	routes.HandleFunc("/create-new-project", apiServer.CreateNewProject).Methods(http.MethodPost)
+	routes.HandleFunc("/create-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
 	//logger.Printf("Server started at port: %v", 8090)
 
 	err = http.ListenAndServe(":8090", routes)
@@ -57,7 +52,7 @@ func NewApiServer(logger *log.Logger) error {
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
 	//apiServer.logger.Printf("Received request: %s", req.Body)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &ResultStatus{}
+	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
 		//apiServer.logger.Printf("failed to read body due to err: %s", err)
@@ -84,4 +79,35 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resultStatus)
 
+}
+
+func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter, req *http.Request) {
+	//apiServer.logger.Printf("Received request: %s", req.Body)
+	body, err := io.ReadAll(req.Body)
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	tableModel := &model.CreateTableModel{}
+	err = json.Unmarshal(body, tableModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	err = apiServer.database.CreateTableForProject(context.Background(), tableModel)
+	if err != nil {
+		return
+	}
+
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
 }
