@@ -72,7 +72,10 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 
 	err = apiServer.database.CreateNewProject(context.Background(), project.Id, project.Name, project.Desc)
 	if err != nil {
-		return
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
 	resultStatus.Status = SUCCESS
@@ -104,7 +107,10 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 
 	err = apiServer.database.CreateTableForProject(context.Background(), tableModel)
 	if err != nil {
-		return
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
 	resultStatus.Status = SUCCESS
