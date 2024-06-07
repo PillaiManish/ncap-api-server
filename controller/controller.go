@@ -39,6 +39,8 @@ func NewApiServer(logger *log.Logger) error {
 
 	routes.HandleFunc("/create-new-project", apiServer.CreateNewProject).Methods(http.MethodPost)
 	routes.HandleFunc("/create-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
+	routes.HandleFunc("/insert-into-table-for-project", apiServer.InsertIntoTableForProject).Methods(http.MethodPost)
+
 	//logger.Printf("Server started at port: %v", 8090)
 
 	err = http.ListenAndServe(":8090", routes)
@@ -106,6 +108,40 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 	}
 
 	err = apiServer.database.CreateTableForProject(context.Background(), tableModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
+}
+
+func (apiServer *APIServerModel) InsertIntoTableForProject(w http.ResponseWriter, req *http.Request) {
+	//apiServer.logger.Printf("Received request: %s", req.Body)
+	body, err := io.ReadAll(req.Body)
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	tableModel := &model.InsertIntoTableModel{}
+	err = json.Unmarshal(body, tableModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	err = apiServer.database.InsertIntoTableForProject(context.Background(), tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED

@@ -70,3 +70,37 @@ func (mysql *MySql) CreateTableForProject(ctx context.Context, model *model.Crea
 
 	return nil
 }
+
+func (mysql *MySql) InsertIntoTableForProject(ctx context.Context, model *model.InsertIntoTableModel) error {
+	// Query Generation
+
+	query := fmt.Sprintf("INSERT INTO %s", model.TableName)
+
+	// For Columns
+	var columnStmt string
+	var columnValueStmt string
+
+	i := 0
+	for columnName, columnValue := range model.Columns {
+		if i == 0 {
+			columnStmt = fmt.Sprintf("%s", columnName)
+			columnValueStmt = fmt.Sprintf(`"%s"`, columnValue)
+		} else {
+
+			columnStmt += "," + fmt.Sprintf("%s", columnName)
+			columnValueStmt += "," + fmt.Sprintf(`"%s"`, columnValue)
+		}
+
+		i += 1
+	}
+
+	query += fmt.Sprintf(" (%s)", columnStmt)
+	query += fmt.Sprintf(" VALUES (%s)", columnValueStmt)
+
+	_, err := mysql.db.ExecContext(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
