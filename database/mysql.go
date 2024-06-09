@@ -152,3 +152,64 @@ func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId s
 	}
 	return tableNameList, nil
 }
+
+func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error) {
+	// Retrieve the table name
+
+	query := "SELECT TABLE_NAME FROM project_metadata where project_id = ? and display_name = ?"
+
+	tableName := ""
+	row := mysql.db.QueryRowContext(ctx, query, model.ProjectId, model.DisplayName)
+
+	if err := row.Scan(&tableName); err != nil {
+		return nil, nil, err
+	}
+
+	columns := []string{}
+	rowData := []map[string]interface{}{}
+
+	query = fmt.Sprintf("SELECT * FROM %s", tableName)
+
+	rows, err := mysql.db.QueryContext(ctx, query)
+	if err != nil {
+		return columns, rowData, err
+	}
+
+	columns, err = rows.Columns()
+	if err != nil {
+		return columns, rowData, err
+	}
+	results := []map[string]interface{}{}
+	for rows.Next() {
+		columnPointers := make([]interface{}, len(columns))
+		columnValues := make([]interface{}, len(columns))
+
+		for i := range columnValues {
+			columnPointers[i] = &columnValues[i]
+		}
+
+		if err := rows.Scan(columnPointers...); err != nil {
+			return nil, nil, err
+		}
+
+		rowMap := make(map[string]interface{})
+		for i, colName := range columns {
+			val := columnValues[i]
+
+			byteVal, ok := val.([]byte)
+			if ok {
+				rowMap[colName] = string(byteVal)
+			} else {
+				rowMap[colName] = val
+			}
+		}
+
+		results = append(results, rowMap)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	return columns, results, nil
+}

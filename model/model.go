@@ -31,4 +31,9 @@ type (
 	RetrieveTableListModel struct {
 		ProjectId string `json:"project_id"`
 	}
+
+	RetrieveDataFromTableModel struct {
+		ProjectId   string `json:"project_id"`
+		DisplayName string `json:"display_name"`
+	}
 )

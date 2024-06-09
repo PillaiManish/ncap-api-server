@@ -45,6 +45,8 @@ func NewApiServer(logger *log.Logger) error {
 	routes.HandleFunc("/insert-into-table-for-project", apiServer.InsertIntoTableForProject).Methods(http.MethodPost)
 	routes.HandleFunc("/delete-table-for-project", apiServer.DropTableForProject).Methods(http.MethodPost)
 	routes.HandleFunc("/retrieve-table-list-for-project", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
+	routes.HandleFunc("/retrieve-data-from-table-for-project", apiServer.RetrieveDataTableForProject).Methods(http.MethodPost)
+
 	//logger.Printf("Server started at port: %v", 8090)
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
@@ -279,7 +281,7 @@ func (apiServer *APIServerModel) RetrieveDataTableForProject(w http.ResponseWrit
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	tableModel := &model.InsertIntoTableModel{}
+	tableModel := &model.RetrieveDataFromTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
@@ -288,12 +290,16 @@ func (apiServer *APIServerModel) RetrieveDataTableForProject(w http.ResponseWrit
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	err = apiServer.database.InsertIntoTableForProject(context.Background(), tableModel)
+	columns, data, err := apiServer.database.RetrieveDataFromTable(context.Background(), tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
 		//apiServer.logger.Printf("failed to read body due to err: %s", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	resultStatus.Data = map[string]interface{}{
+		"columns": columns,
+		"rows":    data,
 	}
 
 	resultStatus.Status = SUCCESS
