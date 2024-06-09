@@ -10,6 +10,7 @@ type Database interface {
 	CreateNewProject(ctx context.Context, projectId, projectName, projectDesc string) error
 	CreateTableForProject(ctx context.Context, model *model.CreateTableModel) error
 	InsertIntoTableForProject(ctx context.Context, model *model.InsertIntoTableModel) error
+	DropTableForProject(ctx context.Context, model *model.DropTableModel) error
 }
 
 func NewDatabase(typeS string) (Database, error) {

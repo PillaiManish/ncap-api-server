@@ -104,3 +104,13 @@ func (mysql *MySql) InsertIntoTableForProject(ctx context.Context, model *model.
 
 	return nil
 }
+
+func (mysql *MySql) DropTableForProject(ctx context.Context, model *model.DropTableModel) error {
+	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", model.TableName)
+	_, err := mysql.db.ExecContext(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

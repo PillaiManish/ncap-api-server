@@ -22,4 +22,8 @@ type (
 		TableName string            `json:"table_name"`
 		Columns   map[string]string `json:"columns"`
 	}
+
+	DropTableModel struct {
+		TableName string `json:"table_name"`
+	}
 )
