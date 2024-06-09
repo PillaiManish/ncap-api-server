@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"ncap-api-server/model"
@@ -112,5 +113,20 @@ func (mysql *MySql) DropTableForProject(ctx context.Context, model *model.DropTa
 		return err
 	}
 
+	return nil
+}
+
+func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error {
+	query := "INSERT INTO project_metadata (project_id, display_name, table_name, metadata) values (?, ?, ?, ?)"
+
+	data, err := json.Marshal(model)
+	if err != nil {
+		return err
+	}
+
+	_, err = mysql.db.ExecContext(ctx, query, 1, model.TableName, model.TableName, data)
+	if err != nil {
+		return err
+	}
 	return nil
 }

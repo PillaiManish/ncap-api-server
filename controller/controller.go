@@ -126,8 +126,20 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 		return
 	}
 
-	err = apiServer.database.CreateTableForProject(context.Background(), tableModel)
+	ctx := context.Background()
+	err = apiServer.database.CreateTableForProject(ctx, tableModel)
 	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	err = apiServer.database.InsertIntoMetaData(ctx, tableModel)
+	if err != nil {
+
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
 		//apiServer.logger.Printf("failed to read body due to err: %s", err)
@@ -210,7 +222,8 @@ func (apiServer *APIServerModel) InsertIntoTableForProject(w http.ResponseWriter
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	err = apiServer.database.InsertIntoTableForProject(context.Background(), tableModel)
+	ctx := context.Background()
+	err = apiServer.database.InsertIntoTableForProject(ctx, tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
