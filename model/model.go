@@ -36,4 +36,10 @@ type (
 		ProjectId   string `json:"project_id"`
 		DisplayName string `json:"display_name"`
 	}
+
+	DeleteEntryFromTableModel struct {
+		ProjectId   string `json:"project_id"`
+		DisplayName string `json:"display_name"`
+		TableRowId  string `json:"table_row_id"`
+	}
 )

@@ -14,6 +14,7 @@ type Database interface {
 	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error
 	SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error)
 	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)
+	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error
 }
 
 func NewDatabase(typeS string) (Database, error) {

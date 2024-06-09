@@ -46,7 +46,7 @@ func NewApiServer(logger *log.Logger) error {
 	routes.HandleFunc("/delete-table-for-project", apiServer.DropTableForProject).Methods(http.MethodPost)
 	routes.HandleFunc("/retrieve-table-list-for-project", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
 	routes.HandleFunc("/retrieve-data-from-table-for-project", apiServer.RetrieveDataTableForProject).Methods(http.MethodPost)
-
+	routes.HandleFunc("/delete-from-table-for-project", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
 	//logger.Printf("Server started at port: %v", 8090)
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
@@ -302,6 +302,39 @@ func (apiServer *APIServerModel) RetrieveDataTableForProject(w http.ResponseWrit
 		"rows":    data,
 	}
 
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
+}
+
+func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req *http.Request) {
+	//apiServer.logger.Printf("Received request: %s", req.Body)
+	body, err := io.ReadAll(req.Body)
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	tableModel := &model.DeleteEntryFromTableModel{}
+	err = json.Unmarshal(body, tableModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	err = apiServer.database.DeleteEntryFromTable(context.Background(), tableModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
 	resultStatus.Status = SUCCESS
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resultStatus)

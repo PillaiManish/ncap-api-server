@@ -213,3 +213,23 @@ func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.Retr
 
 	return columns, results, nil
 }
+
+func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error {
+	query := "SELECT TABLE_NAME FROM project_metadata where project_id = ? and display_name = ?"
+
+	tableName := ""
+	row := mysql.db.QueryRowContext(ctx, query, model.ProjectId, model.DisplayName)
+
+	if err := row.Scan(&tableName); err != nil {
+		return err
+	}
+
+	query = fmt.Sprintf("DELETE FROM %s WHERE id = ?", tableName)
+
+	_, err := mysql.db.ExecContext(ctx, query, model.TableRowId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
