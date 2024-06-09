@@ -8,8 +8,9 @@ type (
 	}
 
 	ResultStatus struct {
-		Status string `json:"status"`
-		Error  string `json:"error,omitempty"`
+		Status string      `json:"status"`
+		Error  string      `json:"error,omitempty"`
+		Data   interface{} `json:"data,omitempty"`
 	}
 
 	CreateTableModel struct {
@@ -25,5 +26,9 @@ type (
 
 	DropTableModel struct {
 		TableName string `json:"table_name"`
+	}
+
+	RetrieveTableListModel struct {
+		ProjectId string `json:"project_id"`
 	}
 )

@@ -44,7 +44,7 @@ func NewApiServer(logger *log.Logger) error {
 	routes.HandleFunc("/drop-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
 	routes.HandleFunc("/insert-into-table-for-project", apiServer.InsertIntoTableForProject).Methods(http.MethodPost)
 	routes.HandleFunc("/delete-table-for-project", apiServer.DropTableForProject).Methods(http.MethodPost)
-
+	routes.HandleFunc("/retrieve-table-list-for-project", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
 	//logger.Printf("Server started at port: %v", 8090)
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
@@ -155,14 +155,6 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 }
 
 func (apiServer *APIServerModel) DropTableForProject(w http.ResponseWriter, req *http.Request) {
-	//w.Header().Set("Access-Control-Allow-Credentials", "true")
-	//
-	//w.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
-	//w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	//w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	//
-	//w.Header().Set("Content-Type", "application/json")
-	//w.Header().Set("Access-Control-Allow-Origin", "*")
 	body, err := io.ReadAll(req.Body)
 	fmt.Printf("Received %s", string(body))
 	resultStatus := &model.ResultStatus{}
@@ -195,6 +187,45 @@ func (apiServer *APIServerModel) DropTableForProject(w http.ResponseWriter, req 
 		return
 	}
 
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
+	return
+}
+
+func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request) {
+	body, err := io.ReadAll(req.Body)
+	fmt.Printf("Received %s", string(body))
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	retrieveTableListModel := &model.RetrieveTableListModel{}
+	err = json.Unmarshal(body, retrieveTableListModel)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	tableList, err := apiServer.database.SelectTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+	resultStatus.Data = tableList
 	resultStatus.Status = SUCCESS
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resultStatus)

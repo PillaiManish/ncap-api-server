@@ -113,6 +113,7 @@ func (mysql *MySql) DropTableForProject(ctx context.Context, model *model.DropTa
 		return err
 	}
 
+	// TODO: drop list from meta-data
 	return nil
 }
 
@@ -129,4 +130,25 @@ func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateT
 		return err
 	}
 	return nil
+}
+
+func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error) {
+	query := "SELECT DISPLAY_NAME FROM project_metadata WHERE project_id = ?"
+	tableNameList := []string{}
+
+	rows, err := mysql.db.QueryContext(ctx, query, projectId)
+	if err != nil {
+		return tableNameList, err
+	}
+
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return tableNameList, err
+		}
+
+		tableNameList = append(tableNameList, tableName)
+
+	}
+	return tableNameList, nil
 }

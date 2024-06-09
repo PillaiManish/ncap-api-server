@@ -12,6 +12,7 @@ type Database interface {
 	InsertIntoTableForProject(ctx context.Context, model *model.InsertIntoTableModel) error
 	DropTableForProject(ctx context.Context, model *model.DropTableModel) error
 	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error
+	SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error)
 }
 
 func NewDatabase(typeS string) (Database, error) {
