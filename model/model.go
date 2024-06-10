@@ -40,6 +40,6 @@ type (
 	DeleteEntryFromTableModel struct {
 		ProjectId   string `json:"project_id"`
 		DisplayName string `json:"display_name"`
-		TableRowId  string `json:"table_row_id"`
+		TableRowId  int    `json:"table_row_id"`
 	}
 )
