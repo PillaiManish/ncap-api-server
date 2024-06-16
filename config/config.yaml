@@ -3,3 +3,5 @@ database:
   connection:
     uri: newuser:password@tcp(localhost:3306)/ncap
 #    DB_NAME: ncap
+jwt:
+  secret-token: "123456"

@@ -28,13 +28,14 @@ type (
 	APIServerModel struct {
 		logger   *log.Logger
 		database database.Database
+		config   *model.Config
 	}
 )
 
-var secretKey = []byte("secret-key")
+//var secretKey = []byte("secret-key")
 
 func NewApiServer(logger *log.Logger, config *model.Config) error {
-	apiServer := &APIServerModel{logger: logger}
+	apiServer := &APIServerModel{logger: logger, config: config}
 
 	routes := mux.NewRouter()
 
@@ -217,7 +218,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	token, err := createToken(checkUser.Email)
+	token, err := apiServer.createToken(checkUser.Email)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -475,14 +476,14 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	json.NewEncoder(w).Encode(resultStatus)
 }
 
-func createToken(email string) (string, error) {
+func (apiServer *APIServerModel) createToken(email string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
 			"email": email,
 			"exp":   time.Now().Add(time.Hour * 24).Unix(),
 		})
 
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString(apiServer.config.JWT.Secret)
 	if err != nil {
 		return "", err
 	}
@@ -490,9 +491,9 @@ func createToken(email string) (string, error) {
 	return tokenString, nil
 }
 
-func verifyToken(tokenString string) error {
+func (apiServer *APIServerModel) verifyToken(tokenString string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return secretKey, nil
+		return apiServer.config.JWT.Secret, nil
 	})
 
 	if err != nil {
