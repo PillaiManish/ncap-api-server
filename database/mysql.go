@@ -247,21 +247,21 @@ func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) er
 	return nil
 }
 
-func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) error {
-	query := "SELECT email, password FROM users where email = ?"
+func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int, error) {
+	query := "SELECT id, email, password FROM users where email = ?"
 
-	email, password := "", ""
+	userId, email, password := -1, "", ""
 	row := mysql.db.QueryRowContext(ctx, query, model.Email)
 
-	if err := row.Scan(&email, &password); err != nil {
-		return err
+	if err := row.Scan(&userId, &email, &password); err != nil {
+		return -1, err
 	}
 
 	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(model.Password))
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	return nil
+	return userId, nil
 
 }

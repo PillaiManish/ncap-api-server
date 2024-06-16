@@ -8,7 +8,7 @@ import (
 
 type Database interface {
 	RegisterUser(ctx context.Context, model *model.UserModel) error
-	LoginUser(ctx context.Context, model *model.UserModel) error
+	LoginUser(ctx context.Context, model *model.UserModel) (int, error)
 
 	CreateNewProject(ctx context.Context, projectId, projectName, projectDesc string) error
 	CreateTable(ctx context.Context, model *model.CreateTableModel) error

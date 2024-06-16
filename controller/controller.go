@@ -208,7 +208,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	err = apiServer.database.LoginUser(context.Background(), checkUser)
+	userId, err := apiServer.database.LoginUser(context.Background(), checkUser)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -218,7 +218,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	token, err := apiServer.createToken(checkUser.Email)
+	token, err := apiServer.createToken(checkUser.Email, userId)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -476,11 +476,12 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	json.NewEncoder(w).Encode(resultStatus)
 }
 
-func (apiServer *APIServerModel) createToken(email string) (string, error) {
+func (apiServer *APIServerModel) createToken(email string, userId int) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			"email": email,
-			"exp":   time.Now().Add(time.Hour * 24).Unix(),
+			"email":  email,
+			"userId": userId,
+			"exp":    time.Now().Add(time.Hour * 24).Unix(),
 		})
 
 	tokenString, err := token.SignedString(apiServer.config.JWT.Secret)
