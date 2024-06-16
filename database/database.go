@@ -11,9 +11,9 @@ type Database interface {
 	LoginUser(ctx context.Context, model *model.UserModel) error
 
 	CreateNewProject(ctx context.Context, projectId, projectName, projectDesc string) error
-	CreateTableForProject(ctx context.Context, model *model.CreateTableModel) error
-	InsertIntoTableForProject(ctx context.Context, model *model.InsertIntoTableModel) error
-	DropTableForProject(ctx context.Context, model *model.DropTableModel) error
+	CreateTable(ctx context.Context, model *model.CreateTableModel) error
+	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
+	DropTable(ctx context.Context, model *model.DropTableModel) error
 	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error
 	SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error)
 	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)

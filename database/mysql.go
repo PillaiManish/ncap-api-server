@@ -35,7 +35,7 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, projectId, projectName
 	return nil
 }
 
-func (mysql *MySql) CreateTableForProject(ctx context.Context, model *model.CreateTableModel) error {
+func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) error {
 	// Query Generation
 
 	query := fmt.Sprintf("CREATE TABLE %s", model.TableName)
@@ -75,7 +75,7 @@ func (mysql *MySql) CreateTableForProject(ctx context.Context, model *model.Crea
 	return nil
 }
 
-func (mysql *MySql) InsertIntoTableForProject(ctx context.Context, model *model.InsertIntoTableModel) error {
+func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error {
 	// Query Generation
 
 	query := fmt.Sprintf("INSERT INTO %s", model.TableName)
@@ -109,7 +109,7 @@ func (mysql *MySql) InsertIntoTableForProject(ctx context.Context, model *model.
 	return nil
 }
 
-func (mysql *MySql) DropTableForProject(ctx context.Context, model *model.DropTableModel) error {
+func (mysql *MySql) DropTable(ctx context.Context, model *model.DropTableModel) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", model.TableName)
 	_, err := mysql.db.ExecContext(ctx, query)
 	if err != nil {

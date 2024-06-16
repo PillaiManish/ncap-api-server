@@ -50,13 +50,13 @@ func NewApiServer(logger *log.Logger, config *model.Config) error {
 	routes.HandleFunc("/register", apiServer.RegisterUser).Methods(http.MethodPost)
 
 	routes.HandleFunc("/create-new-project", apiServer.CreateNewProject).Methods(http.MethodPost)
-	routes.HandleFunc("/create-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
-	routes.HandleFunc("/drop-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
-	routes.HandleFunc("/insert-into-table-for-project", apiServer.InsertIntoTableForProject).Methods(http.MethodPost)
-	routes.HandleFunc("/delete-table-for-project", apiServer.DropTableForProject).Methods(http.MethodPost)
-	routes.HandleFunc("/retrieve-table-list-for-project", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
-	routes.HandleFunc("/retrieve-data-from-table-for-project", apiServer.RetrieveDataTableForProject).Methods(http.MethodPost)
-	routes.HandleFunc("/delete-from-table-for-project", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
+	routes.HandleFunc("/create-table", apiServer.CreateNewTable).Methods(http.MethodPost)
+	routes.HandleFunc("/drop-table", apiServer.DropTable).Methods(http.MethodPost)
+	routes.HandleFunc("/insert-into-table", apiServer.InsertIntoTable).Methods(http.MethodPost)
+	//routes.HandleFunc("/delete-table", apiServer.DropTable).Methods(http.MethodPost)
+	routes.HandleFunc("/retrieve-table-list", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
+	routes.HandleFunc("/retrieve-data-from-table", apiServer.RetrieveDataTable).Methods(http.MethodPost)
+	routes.HandleFunc("/delete-from-table", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
 	//logger.Printf("Server started at port: %v", 8090)
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
@@ -233,7 +233,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 
 }
 
-func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter, req *http.Request) {
+func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http.Request) {
 	//w.Header().Set("Access-Control-Allow-Credentials", "true")
 	//
 	//w.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
@@ -265,7 +265,7 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 	}
 
 	ctx := context.Background()
-	err = apiServer.database.CreateTableForProject(ctx, tableModel)
+	err = apiServer.database.CreateTable(ctx, tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -292,7 +292,7 @@ func (apiServer *APIServerModel) CreateNewTableForProject(w http.ResponseWriter,
 	return
 }
 
-func (apiServer *APIServerModel) DropTableForProject(w http.ResponseWriter, req *http.Request) {
+func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Request) {
 	body, err := io.ReadAll(req.Body)
 	fmt.Printf("Received %s", string(body))
 	resultStatus := &model.ResultStatus{}
@@ -315,7 +315,7 @@ func (apiServer *APIServerModel) DropTableForProject(w http.ResponseWriter, req 
 		return
 	}
 
-	err = apiServer.database.DropTableForProject(context.Background(), tableModel)
+	err = apiServer.database.DropTable(context.Background(), tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -370,7 +370,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 	return
 }
 
-func (apiServer *APIServerModel) InsertIntoTableForProject(w http.ResponseWriter, req *http.Request) {
+func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *http.Request) {
 	//apiServer.logger.Printf("Received request: %s", req.Body)
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
@@ -392,7 +392,7 @@ func (apiServer *APIServerModel) InsertIntoTableForProject(w http.ResponseWriter
 	}
 
 	ctx := context.Background()
-	err = apiServer.database.InsertIntoTableForProject(ctx, tableModel)
+	err = apiServer.database.InsertIntoTable(ctx, tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
@@ -405,7 +405,7 @@ func (apiServer *APIServerModel) InsertIntoTableForProject(w http.ResponseWriter
 	json.NewEncoder(w).Encode(resultStatus)
 }
 
-func (apiServer *APIServerModel) RetrieveDataTableForProject(w http.ResponseWriter, req *http.Request) {
+func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *http.Request) {
 	//apiServer.logger.Printf("Received request: %s", req.Body)
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
