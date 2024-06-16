@@ -1,3 +1,4 @@
+
 database:
   type: MySQL
   connection:

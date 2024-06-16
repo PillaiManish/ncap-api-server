@@ -21,6 +21,12 @@ const (
 	SUCCESS = "SUCCESS"
 )
 
+type JwtClaims struct {
+	UserID int `json:"userId"`
+	jwt.RegisteredClaims
+	//jwt.StandardClaims
+}
+
 type (
 	APIServer interface {
 	}
@@ -74,14 +80,38 @@ func NewApiServer(logger *log.Logger, config *model.Config) error {
 
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
 	//apiServer.logger.Printf("Received request: %s", req.Body)
-	body, err := io.ReadAll(req.Body)
+	w.Header().Set("Content-Type", "application/json")
+	tokenString := req.Header.Get("Authorization")
 	resultStatus := &model.ResultStatus{}
+
+	if tokenString == "" {
+		resultStatus.Error = fmt.Errorf("token not provided").Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+	tokenString = tokenString[len("Bearer "):]
+
+	userId, err := apiServer.verifyToken(tokenString)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
 
 	if err != nil {
 		//apiServer.logger.Printf("failed to read body due to err: %s", err)
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
 	}
 
 	project := &model.ProjectModel{}
@@ -89,16 +119,21 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
-		//apiServer.logger.Printf("failed to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+
 	}
 
-	err = apiServer.database.CreateNewProject(context.Background(), project.Id, project.Name, project.Desc)
+	project.UserId = userId
+
+	err = apiServer.database.CreateNewProject(context.Background(), project)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED
-		//apiServer.logger.Printf("failed to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
 	}
 
 	resultStatus.Status = SUCCESS
@@ -492,18 +527,24 @@ func (apiServer *APIServerModel) createToken(email string, userId int) (string, 
 	return tokenString, nil
 }
 
-func (apiServer *APIServerModel) verifyToken(tokenString string) error {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return apiServer.config.JWT.Secret, nil
 	})
 
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	if !token.Valid {
-		return fmt.Errorf("invalid token")
+		return -1, fmt.Errorf("invalid token")
 	}
+	userId := -1
+	if claims, ok := token.Claims.(*JwtClaims); ok && token.Valid {
+		userId = claims.UserID
+		return userId, nil
 
-	return nil
+	} else {
+		return -1, fmt.Errorf("invalid token")
+	}
 }

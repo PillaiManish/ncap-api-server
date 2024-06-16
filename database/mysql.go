@@ -25,10 +25,23 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 	return &MySql{db: db}, nil
 }
 
-func (mysql *MySql) CreateNewProject(ctx context.Context, projectId, projectName, projectDesc string) error {
-	query := "INSERT INTO project_details VALUES (?, ?, ?)"
+func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel) error {
+	query := "SELECT COUNT(id) FROM project_details where user_id = ?"
 
-	_, err := mysql.db.ExecContext(ctx, query, projectId, projectName, projectDesc)
+	rowCount := 0
+	row := mysql.db.QueryRowContext(ctx, query, model.UserId)
+
+	if err := row.Scan(&rowCount); err != nil {
+		return err
+	}
+
+	if rowCount >= 2 {
+		return fmt.Errorf("project limit exceeded")
+	}
+
+	query = "INSERT INTO project_details (user_id, name, description) VALUES (?, ?, ?)"
+
+	_, err := mysql.db.ExecContext(ctx, query, model.UserId, model.Name, model.Desc)
 	if err != nil {
 		return err
 	}

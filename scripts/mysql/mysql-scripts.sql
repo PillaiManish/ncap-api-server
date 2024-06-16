@@ -9,9 +9,12 @@ PRIMARY KEY (id)
 );
 
 CREATE TABLE project_details (
-    id varchar(250),
+    id int AUTO_INCREMENT,
+    user_id int,
     name varchar(250),
-    description varchar(250)
+    description varchar(250),
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE project_metadata (

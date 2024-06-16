@@ -8,9 +8,10 @@ type (
 	}
 
 	ProjectModel struct {
-		Id   string `json:"id,omitempty"`
-		Name string `json:"name,omitempty"`
-		Desc string `json:"desc,omitempty"`
+		UserId int    `json:"user_id,omitempty"`
+		Id     string `json:"id,omitempty"`
+		Name   string `json:"name,omitempty"`
+		Desc   string `json:"desc,omitempty"`
 	}
 
 	ResultStatus struct {
