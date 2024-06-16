@@ -1,0 +1,5 @@
+database:
+  type: MySQL
+  connection:
+    uri: newuser:password@tcp(localhost:3306)/ncap
+#    DB_NAME: ncap

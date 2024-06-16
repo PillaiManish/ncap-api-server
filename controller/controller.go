@@ -33,12 +33,12 @@ type (
 
 var secretKey = []byte("secret-key")
 
-func NewApiServer(logger *log.Logger) error {
+func NewApiServer(logger *log.Logger, config *model.Config) error {
 	apiServer := &APIServerModel{logger: logger}
 
 	routes := mux.NewRouter()
 
-	newDB, err := database.NewDatabase("MySQL")
+	newDB, err := database.NewDatabase(config.Database)
 	if err != nil {
 		return err
 	}

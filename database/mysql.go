@@ -14,8 +14,10 @@ type MySql struct {
 	db *sql.DB
 }
 
-func NewMySQLConnection() (Database, error) {
-	db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
+func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
+	db, err := sql.Open("mysql", config.Connection.URI)
+
+	//db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
 	if err != nil {
 		return nil, err
 	}

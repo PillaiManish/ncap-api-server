@@ -20,12 +20,12 @@ type Database interface {
 	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error
 }
 
-func NewDatabase(typeS string) (Database, error) {
-	switch typeS {
+func NewDatabase(config *model.DatabaseConfig) (Database, error) {
+	switch config.Type {
 	case "MySQL":
-		return NewMySQLConnection()
+		return NewMySQLConnection(config)
 	default:
-		return nil, fmt.Errorf("database type %s not supported", typeS)
+		return nil, fmt.Errorf("database type %s not supported", config.Type)
 	}
 
 }
