@@ -1,3 +1,13 @@
+# TODO: add columns: created_timestamp, updated_timestamp
+
+CREATE TABLE users (
+  id int auto_increment,
+  name varchar(250),
+  email varchar(250) UNIQUE ,
+  password varchar(250),
+PRIMARY KEY (id)
+);
+
 CREATE TABLE project_details (
     id varchar(250),
     name varchar(250),

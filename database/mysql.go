@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 	"ncap-api-server/model"
 )
 
@@ -14,7 +15,7 @@ type MySql struct {
 }
 
 func NewMySQLConnection() (Database, error) {
-	db, err := sql.Open("mysql", "pillaimanish:password@tcp(localhost:3306)/ncap")
+	db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
 	if err != nil {
 		return nil, err
 	}
@@ -232,4 +233,33 @@ func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.Delet
 	}
 
 	return nil
+}
+
+func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) error {
+	query := "INSERT INTO users (name, email, password) value (?, ?, ?)"
+
+	_, err := mysql.db.ExecContext(ctx, query, model.Name, model.Email, model.Password)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) error {
+	query := "SELECT email, password FROM users where email = ?"
+
+	email, password := "", ""
+	row := mysql.db.QueryRowContext(ctx, query, model.Email)
+
+	if err := row.Scan(&email, &password); err != nil {
+		return err
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(model.Password))
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }

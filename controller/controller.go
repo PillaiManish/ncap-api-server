@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log"
 	"ncap-api-server/database"
 	"ncap-api-server/model"
 	"net/http"
+	"time"
 )
 
 const (
@@ -28,6 +31,8 @@ type (
 	}
 )
 
+var secretKey = []byte("secret-key")
+
 func NewApiServer(logger *log.Logger) error {
 	apiServer := &APIServerModel{logger: logger}
 
@@ -38,6 +43,10 @@ func NewApiServer(logger *log.Logger) error {
 		return err
 	}
 	apiServer.database = newDB
+
+	// Authentication
+	routes.HandleFunc("/login", apiServer.LoginUser).Methods(http.MethodPost)
+	routes.HandleFunc("/register", apiServer.RegisterUser).Methods(http.MethodPost)
 
 	routes.HandleFunc("/create-new-project", apiServer.CreateNewProject).Methods(http.MethodPost)
 	routes.HandleFunc("/create-table-for-project", apiServer.CreateNewTableForProject).Methods(http.MethodPost)
@@ -53,7 +62,7 @@ func NewApiServer(logger *log.Logger) error {
 	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 	origins := handlers.AllowedOrigins([]string{"http://localhost:4200"})
 
-	http.ListenAndServe(":8090", handlers.CORS(headers, methods, origins)(routes))
+	err = http.ListenAndServe(":8090", handlers.CORS(headers, methods, origins)(routes))
 	err = http.ListenAndServe(":8090", routes)
 	if err != nil {
 		return err
@@ -90,6 +99,132 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 		//apiServer.logger.Printf("failed to read body due to err: %s", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
+
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
+
+}
+
+func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.Request) {
+	//apiServer.logger.Printf("Received request: %s", req.Body)
+	body, err := io.ReadAll(req.Body)
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	newUser := &model.UserModel{}
+	err = json.Unmarshal(body, newUser)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if newUser.Name == "" || newUser.Password == "" || newUser.Email == "" {
+		resultStatus.Error = fmt.Errorf("name/password/email cannot be empty").Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 14)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	newUser.Password = string(encryptPasswd)
+
+	err = apiServer.database.RegisterUser(context.Background(), newUser)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		return
+	}
+
+	resultStatus.Status = SUCCESS
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultStatus)
+
+}
+
+func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Request) {
+	//apiServer.logger.Printf("Received request: %s", req.Body)
+	body, err := io.ReadAll(req.Body)
+	resultStatus := &model.ResultStatus{}
+
+	if err != nil {
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	checkUser := &model.UserModel{}
+	err = json.Unmarshal(body, checkUser)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		//apiServer.logger.Printf("failed to read body due to err: %s", err)
+		//http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if checkUser.Password == "" || checkUser.Email == "" {
+		resultStatus.Error = fmt.Errorf("email/password cannot be empty").Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
+	err = apiServer.database.LoginUser(context.Background(), checkUser)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+
+		return
+	}
+
+	token, err := createToken(checkUser.Email)
+	if err != nil {
+		resultStatus.Error = err.Error()
+		resultStatus.Status = FAILED
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+	}
+	resultStatus.Data = token
 
 	resultStatus.Status = SUCCESS
 	w.Header().Set("Content-Type", "application/json")
@@ -338,4 +473,35 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	resultStatus.Status = SUCCESS
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resultStatus)
+}
+
+func createToken(email string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
+		jwt.MapClaims{
+			"email": email,
+			"exp":   time.Now().Add(time.Hour * 24).Unix(),
+		})
+
+	tokenString, err := token.SignedString(secretKey)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func verifyToken(tokenString string) error {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return secretKey, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if !token.Valid {
+		return fmt.Errorf("invalid token")
+	}
+
+	return nil
 }
