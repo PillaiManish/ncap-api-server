@@ -14,7 +14,7 @@ type Database interface {
 	CreateTable(ctx context.Context, model *model.CreateTableModel) error
 	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
 	DropTable(ctx context.Context, model *model.DropTableModel) error
-	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error
+	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) error
 	SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error)
 	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)
 	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error

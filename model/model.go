@@ -21,6 +21,7 @@ type (
 	}
 
 	CreateTableModel struct {
+		DisplayName string            `json:"name"`
 		TableName   string            `json:"table_name"`
 		Columns     map[string]string `json:"columns"`
 		PrimaryKeys []string          `json:"primary_keys"`

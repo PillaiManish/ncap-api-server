@@ -14,6 +14,8 @@ import (
 	"ncap-api-server/database"
 	"ncap-api-server/model"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -274,9 +276,13 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 	//w.Header().Set("Content-Type", common.JSONApplicationType)
 	//w.Header().Set("Access-Control-Allow-Origin", "*")
 	body, err := io.ReadAll(req.Body)
-	fmt.Printf("Received %s", string(body))
+	//fmt.Printf("Received %s", string(body))
 	resultStatus := &model.ResultStatus{}
 
+	params := req.URL.Query()
+	project_id := params.Get("project_id")
+
+	projectId, err := strconv.Atoi(project_id)
 	if err != nil {
 		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
 		resultStatus.Error = err.Error()
@@ -295,6 +301,8 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 		return
 	}
 
+	tableModel.TableName = CreateTableNameFromName(tableModel.TableName, projectId)
+
 	ctx := context.Background()
 	err = apiServer.database.CreateTable(ctx, tableModel)
 	if err != nil {
@@ -306,7 +314,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 		return
 	}
 
-	err = apiServer.database.InsertIntoMetaData(ctx, tableModel)
+	err = apiServer.database.InsertIntoMetaData(ctx, tableModel, projectId)
 	if err != nil {
 
 		resultStatus.Error = err.Error()
@@ -543,4 +551,11 @@ func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
 	} else {
 		return -1, fmt.Errorf("invalid token")
 	}
+}
+
+func CreateTableNameFromName(displayName string, projectId int) string {
+	tableName := strings.ReplaceAll(displayName, "-", "_")
+	tableName = strings.ReplaceAll(displayName, " ", "_")
+
+	return fmt.Sprintf("%v_%s", projectId, tableName)
 }

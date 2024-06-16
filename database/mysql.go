@@ -133,7 +133,7 @@ func (mysql *MySql) DropTable(ctx context.Context, model *model.DropTableModel) 
 	return nil
 }
 
-func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel) error {
+func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) error {
 	query := "INSERT INTO project_metadata (project_id, display_name, table_name, metadata) values (?, ?, ?, ?)"
 
 	data, err := json.Marshal(model)
@@ -141,7 +141,7 @@ func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateT
 		return err
 	}
 
-	_, err = mysql.db.ExecContext(ctx, query, 1, model.TableName, model.TableName, data)
+	_, err = mysql.db.ExecContext(ctx, query, projectId, model.DisplayName, model.TableName, data)
 	if err != nil {
 		return err
 	}
