@@ -1,4 +1,5 @@
-
+projectConfig:
+  limit: 5
 database:
   type: MySQL
   connection:

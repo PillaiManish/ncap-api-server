@@ -2,8 +2,13 @@ package model
 
 type (
 	Config struct {
-		Database *DatabaseConfig `yaml:"database,omitempty" json:"database,omitempty"`
-		JWT      *JWT            `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+		Database      *DatabaseConfig `yaml:"database,omitempty" json:"database,omitempty"`
+		ProjectConfig *ProjectConfig  `yaml:"projectConfig,omitempty" json:"projectConfig,omitempty"`
+		JWT           *JWT            `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+	}
+
+	ProjectConfig struct {
+		Limit int `yaml:"limit,omitempty" json:"limit,omitempty"`
 	}
 
 	DatabaseConfig struct {

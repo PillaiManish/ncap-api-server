@@ -127,7 +127,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 
 	project.UserId = userId
 
-	err = apiServer.database.CreateNewProject(context.Background(), project)
+	err = apiServer.database.CreateNewProject(context.Background(), project, apiServer.config.ProjectConfig.Limit)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = FAILED

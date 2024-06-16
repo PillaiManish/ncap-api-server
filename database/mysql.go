@@ -25,7 +25,7 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 	return &MySql{db: db}, nil
 }
 
-func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel) error {
+func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) error {
 	query := "SELECT COUNT(id) FROM project_details where user_id = ?"
 
 	rowCount := 0
@@ -35,7 +35,7 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 		return err
 	}
 
-	if rowCount >= 2 {
+	if rowCount >= projectLimit {
 		return fmt.Errorf("project limit exceeded")
 	}
 
