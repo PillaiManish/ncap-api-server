@@ -301,7 +301,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 		return
 	}
 
-	tableModel.TableName = CreateTableNameFromName(tableModel.TableName, projectId)
+	tableModel.TableName = CreateTableNameFromName(tableModel.DisplayName, projectId)
 
 	ctx := context.Background()
 	err = apiServer.database.CreateTable(ctx, tableModel)
@@ -555,7 +555,7 @@ func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
 
 func CreateTableNameFromName(displayName string, projectId int) string {
 	tableName := strings.ReplaceAll(displayName, "-", "_")
-	tableName = strings.ReplaceAll(displayName, " ", "_")
+	tableName = strings.ReplaceAll(tableName, " ", "_")
 
 	return fmt.Sprintf("%v_%s", projectId, tableName)
 }
