@@ -17,7 +17,12 @@ type (
 	}
 
 	ConnectionConfig struct {
-		URI string `yaml:"uri" json:"uri"`
+		URI    *string `yaml:"uri" json:"uri"`
+		DBName string  `yaml:"dbName" json:"dbName"`
+		Host   string  `yaml:"host" json:"host"`
+		Port   int     `yaml:"port" json:"port"`
+		User   string  `yaml:"user" json:"user"`
+		Pass   string  `yaml:"pass" json:"pass"`
 	}
 
 	JWT struct {

@@ -15,7 +15,16 @@ type MySql struct {
 }
 
 func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
-	db, err := sql.Open("mysql", config.Connection.URI)
+	uri := ""
+	connectionDetails := config.Connection
+
+	if config.Connection.URI == nil {
+		uri = fmt.Sprintf("%s:%s@tcp(%s:%v)/%s?parseTime=true", connectionDetails.User, connectionDetails.Pass, connectionDetails.Host, connectionDetails.Port, connectionDetails.DBName)
+	} else {
+		uri = *config.Connection.URI
+	}
+
+	db, err := sql.Open("mysql", uri)
 
 	//db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
 	if err != nil {

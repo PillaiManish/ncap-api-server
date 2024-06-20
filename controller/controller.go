@@ -67,8 +67,8 @@ func NewApiServer(logger *log.Logger, config *model.Config) error {
 	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 	origins := handlers.AllowedOrigins([]string{"http://localhost:4200"})
 
-	err = http.ListenAndServe(":8090", handlers.CORS(headers, methods, origins)(routes))
-	err = http.ListenAndServe(":8090", routes)
+	err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
+	err = http.ListenAndServe(":8080", routes)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,11 @@ projectConfig:
 database:
   type: MySQL
   connection:
-    uri: newuser:password@tcp(localhost:3306)/ncap
-#    DB_NAME: ncap
+#    uri: newuser:password@tcp(localhost:3306)/ncap
+    host: localhost
+    port: 3306
+    dbName: ncap
+    user: newuser
+    pass: password
 jwt:
   secret-token: "123456"
