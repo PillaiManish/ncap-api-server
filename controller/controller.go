@@ -7,9 +7,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"io"
-	"log"
 	"ncap-api-server/common"
 	"ncap-api-server/database"
 	"ncap-api-server/model"
@@ -30,7 +30,7 @@ type (
 	}
 
 	APIServerModel struct {
-		logger   *log.Logger
+		logger   *logrus.Logger
 		database database.Database
 		config   *model.Config
 	}
@@ -38,7 +38,7 @@ type (
 
 //var secretKey = []byte("secret-key")
 
-func NewApiServer(logger *log.Logger, config *model.Config) error {
+func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 	apiServer := &APIServerModel{logger: logger, config: config}
 
 	routes := mux.NewRouter()
@@ -46,7 +46,6 @@ func NewApiServer(logger *log.Logger, config *model.Config) error {
 	newDB, err := database.NewDatabase(config.Database)
 	if err != nil {
 		logger.Fatalf("could not connect to database due to err: %s", err.Error())
-		return err
 	}
 
 	if newDB == nil {
@@ -72,19 +71,18 @@ func NewApiServer(logger *log.Logger, config *model.Config) error {
 	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 	origins := handlers.AllowedOrigins([]string{config.AdminPanelUrl})
 
-	logger.Printf("ncap-api-server starting at port: %v", 8080)
+	logger.Infof("ncap-api-server starting at port: %v", 8080)
 	err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
 	//err = http.ListenAndServe(":8080", routes)
 	if err != nil {
 		logger.Fatalf("ncap-api-server failed to start due to err: %s", err.Error())
-		return err
 	}
 
 	return nil
 }
 
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Create-New-Project request")
+	apiServer.logger.Debugf("Received Create-New-Project request")
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	tokenString := req.Header.Get("Authorization")
 	resultStatus := &model.ResultStatus{}
@@ -148,7 +146,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 }
 
 func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Register request")
+	apiServer.logger.Debugf("Received Register request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
@@ -212,7 +210,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 }
 
 func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Login request")
+	apiServer.logger.Debugf("Received Login request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
@@ -258,6 +256,14 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	if userId == -1 {
+		resultStatus.Status = common.FAILED
+		resultStatus.Message = "user not registered"
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+
 	token, err := apiServer.createToken(checkUser.Email, userId)
 	if err != nil {
 		resultStatus.Error = err.Error()
@@ -274,7 +280,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 }
 
 func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Create-New-Table request")
+	apiServer.logger.Debugf("Received Create-New-Table request")
 
 	body, err := io.ReadAll(req.Body)
 	//fmt.Printf("Received %s", string(body))
@@ -333,7 +339,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 }
 
 func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Drop-Table request")
+	apiServer.logger.Debugf("Received Drop-Table request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
@@ -372,7 +378,7 @@ func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Requ
 }
 
 func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Retrieve-Table-List request")
+	apiServer.logger.Debugf("Received Retrieve-Table-List request")
 
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
@@ -412,7 +418,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 }
 
 func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Insert-Into-Table request")
+	apiServer.logger.Debugf("Received Insert-Into-Table request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
@@ -447,7 +453,7 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 }
 
 func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Data Table request")
+	apiServer.logger.Debugf("Received Data Table request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
@@ -485,7 +491,7 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 }
 
 func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Printf("Received Delete-Entry request")
+	apiServer.logger.Debugf("Received Delete-Entry request")
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 

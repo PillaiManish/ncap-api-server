@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
@@ -28,6 +29,10 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 
 	//db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
 	if err != nil {
+		return nil, err
+	}
+
+	if err = db.Ping(); err != nil {
 		return nil, err
 	}
 
@@ -276,6 +281,9 @@ func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int,
 	row := mysql.db.QueryRowContext(ctx, query, model.Email)
 
 	if err := row.Scan(&userId, &email, &password); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return -1, nil
+		}
 		return -1, err
 	}
 

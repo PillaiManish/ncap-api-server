@@ -15,9 +15,10 @@ type (
 	}
 
 	ResultStatus struct {
-		Status string      `json:"status"`
-		Error  string      `json:"error,omitempty"`
-		Data   interface{} `json:"data,omitempty"`
+		Status  string      `json:"status"`
+		Error   string      `json:"error,omitempty"`
+		Data    interface{} `json:"data,omitempty"`
+		Message string      `json:"message,omitempty"`
 	}
 
 	CreateTableModel struct {

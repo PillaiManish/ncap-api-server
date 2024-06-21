@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
-	"log"
 	"ncap-api-server/controller"
 	"ncap-api-server/model"
 	"os"
@@ -10,8 +10,7 @@ import (
 
 func main() {
 	var err error
-	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds)
-
+	logger := logrus.New()
 	data, err := os.ReadFile("config/config.yaml")
 	if err != nil {
 		panic(err)
@@ -22,6 +21,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	logLevel := logrus.InfoLevel
+
+	if level, err := logrus.ParseLevel(config.LogLevel); err == nil {
+		logLevel = level
+	}
+	logger.SetLevel(logLevel)
 
 	err = controller.NewApiServer(logger, config)
 	if err != nil {

@@ -1,4 +1,5 @@
 adminPanelUrl: http://localhost:4200
+logLevel: DEBUG
 projectConfig:
   limit: 5
 database:
