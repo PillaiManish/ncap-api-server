@@ -10,7 +10,7 @@ import (
 
 func main() {
 	var err error
-	logger := &log.Logger{}
+	logger := log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds)
 
 	data, err := os.ReadFile("config/config.yaml")
 	if err != nil {
