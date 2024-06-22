@@ -16,6 +16,12 @@ type (
 	DatabaseConfig struct {
 		Type       string            `yaml:"type" json:"type"`
 		Connection *ConnectionConfig `yaml:"connection,omitempty" json:"connection,omitempty"`
+		SSL        *SSL              `yaml:"ssl,omitempty" json:"ssl,omitempty"`
+	}
+
+	SSL struct {
+		Enabled bool   `json:"enabled" yaml:"enabled"`
+		CAPath  string `json:"caPath" yaml:"caPath"`
 	}
 
 	ConnectionConfig struct {

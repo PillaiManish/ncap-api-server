@@ -5,11 +5,14 @@ projectConfig:
 database:
   type: MySQL
   connection:
-#    uri: mysql://avnadmin:AVNS_Iq7-KhRtTA93KjQsK4q@ncap-api-server-mysql-ncap-api-server.d.aivencloud.com:21612/defaultdb?ssl-mode=REQUIRED
+    uri: avnadmin:AVNS_KqhO5uBIVQsdG8IkbaQ@tcp(ncap-api-server-mysql-ncap-api-server.d.aivencloud.com:21612)/defaultdb
     host: localhost
     port: 3306
     dbName: ncap
     user: newuser
     pass: password
+  ssl:
+    enabled: true
+    caPath: config/mysql-ca-certs.pem
 jwt:
   secret-token: "123456"

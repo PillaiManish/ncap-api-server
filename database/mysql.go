@@ -2,17 +2,40 @@ package database
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 	"ncap-api-server/model"
+	"os"
 )
 
 type MySql struct {
 	db *sql.DB
+}
+
+func registerTLSConfig(caPath string) error {
+	rootCertPool := x509.NewCertPool()
+	pem, err := os.ReadFile(caPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CA cert: %w", err)
+	}
+	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
+		return fmt.Errorf("failed to append CA certs")
+	}
+
+	err = mysql.RegisterTLSConfig("custom", &tls.Config{
+		RootCAs: rootCertPool,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
@@ -25,8 +48,15 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 		uri = *config.Connection.URI
 	}
 
-	db, err := sql.Open("mysql", uri)
+	if config.SSL != nil && config.SSL.Enabled {
+		err := registerTLSConfig(config.SSL.CAPath)
+		if err != nil {
+			return nil, err
+		}
+	}
 
+	db, err := sql.Open("mysql", uri)
+	//db.
 	//db, err := sql.Open("mysql", "newuser:password@tcp(localhost:3306)/ncap")
 	if err != nil {
 		return nil, err
