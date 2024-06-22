@@ -146,17 +146,17 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 }
 
 func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Register request")
+	endpointName := "Login"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resultStatus)
-
 		//http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -164,6 +164,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 	newUser := &model.UserModel{}
 	err = json.Unmarshal(body, newUser)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
@@ -175,7 +176,9 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 	}
 
 	if newUser.Name == "" || newUser.Password == "" || newUser.Email == "" {
-		resultStatus.Error = fmt.Errorf("name/password/email cannot be empty").Error()
+		err := fmt.Errorf("name/password/email cannot be empty")
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resultStatus)
@@ -184,6 +187,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 
 	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 14)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusInternalServerError)
@@ -195,6 +199,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 
 	err = apiServer.database.RegisterUser(context.Background(), newUser)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusInternalServerError)
@@ -210,12 +215,13 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 }
 
 func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Login request")
+	endpointName := "Login"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
@@ -228,18 +234,18 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 	checkUser := &model.UserModel{}
 	err = json.Unmarshal(body, checkUser)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resultStatus)
-
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if checkUser.Password == "" || checkUser.Email == "" {
-		resultStatus.Error = fmt.Errorf("email/password cannot be empty").Error()
+		err := fmt.Errorf("email/password cannot be empty")
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resultStatus)
@@ -248,6 +254,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 
 	userId, err := apiServer.database.LoginUser(context.Background(), checkUser)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusInternalServerError)
@@ -257,6 +264,8 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 	}
 
 	if userId == -1 {
+		err := fmt.Errorf("user not registered")
+		apiServer.logger.Warnf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Status = common.FAILED
 		resultStatus.Message = "user not registered"
 		w.WriteHeader(http.StatusOK)
@@ -266,14 +275,16 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 
 	token, err := apiServer.createToken(checkUser.Email, userId)
 	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(resultStatus)
 	}
 	resultStatus.Data = token
-
 	resultStatus.Status = common.SUCCESS
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	json.NewEncoder(w).Encode(resultStatus)
 

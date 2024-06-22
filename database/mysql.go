@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
+	mysqlLib "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 	"ncap-api-server/model"
 	"os"
@@ -299,6 +299,10 @@ func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) er
 
 	_, err := mysql.db.ExecContext(ctx, query, model.Name, model.Email, model.Password)
 	if err != nil {
+		var mysqlErr *mysqlLib.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return fmt.Errorf("user already exists, please log in")
+		}
 		return err
 	}
 	return nil
@@ -319,7 +323,7 @@ func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int,
 
 	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(model.Password))
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("invalid password")
 	}
 
 	return userId, nil
