@@ -14,6 +14,7 @@ import (
 	"ncap-api-server/database"
 	"ncap-api-server/model"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -69,8 +70,14 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
 	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
-	origins := handlers.AllowedOrigins([]string{config.AdminPanelUrl})
 
+	allowedOrigins := []string{config.AdminPanelUrl}
+
+	if os.Getenv(common.ADMIN_PANEL_URL) != "" {
+		allowedOrigins = append(allowedOrigins, os.Getenv(common.ADMIN_PANEL_URL))
+	}
+
+	origins := handlers.AllowedOrigins(allowedOrigins)
 	logger.Infof("ncap-api-server starting at port: %v", 8080)
 	err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
 	//err = http.ListenAndServe(":8080", routes)

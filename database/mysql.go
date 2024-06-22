@@ -29,7 +29,7 @@ func registerTLSConfig(caPath string) error {
 		return fmt.Errorf("failed to append CA certs")
 	}
 
-	err = mysql.RegisterTLSConfig("custom", &tls.Config{
+	err = mysqlLib.RegisterTLSConfig("custom", &tls.Config{
 		RootCAs: rootCertPool,
 	})
 	if err != nil {
