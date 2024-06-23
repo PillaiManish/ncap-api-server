@@ -143,16 +143,17 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 
 	project.UserId = userId
 
-	err = apiServer.database.CreateNewProject(context.Background(), project, apiServer.config.ProjectConfig.Limit)
+	statusCode, err := apiServer.database.CreateNewProject(context.Background(), project, apiServer.config.ProjectConfig.Limit)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = statusCode
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
 	resultStatus.Status = common.SUCCESS
+	resultStatus.StatusCode = http.StatusOK
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	json.NewEncoder(w).Encode(resultStatus)
 

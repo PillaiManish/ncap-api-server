@@ -70,27 +70,27 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 	return &MySql{db: db}, nil
 }
 
-func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) error {
+func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) (int, error) {
 	query := "SELECT COUNT(id) FROM project_details where user_id = ?"
 
 	rowCount := 0
 	row := mysql.db.QueryRowContext(ctx, query, model.UserId)
 
 	if err := row.Scan(&rowCount); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 
 	if rowCount >= projectLimit {
-		return fmt.Errorf("project limit exceeded")
+		return http.StatusConflict, fmt.Errorf("project limit exceeded")
 	}
 
 	query = "INSERT INTO project_details (user_id, name, description) VALUES (?, ?, ?)"
 
 	_, err := mysql.db.ExecContext(ctx, query, model.UserId, model.Name, model.Desc)
 	if err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
-	return nil
+	return http.StatusOK, nil
 }
 
 func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error) {

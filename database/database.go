@@ -10,7 +10,7 @@ type Database interface {
 	RegisterUser(ctx context.Context, model *model.UserModel) (int64, int, error)
 	LoginUser(ctx context.Context, model *model.UserModel) (int, int, error)
 
-	CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) error
+	CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) (int, error)
 	CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error)
 	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
 	DropTable(ctx context.Context, model *model.DropTableModel) error
