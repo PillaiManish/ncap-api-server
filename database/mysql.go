@@ -334,3 +334,28 @@ func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int,
 	return userId, http.StatusAccepted, nil
 
 }
+
+func (mysql *MySql) RetrieveProjectList(ctx context.Context, userId int) ([]*model.ProjectModel, int, error) {
+	query := "SELECT id, name, description FROM project_details where user_id = ?"
+
+	rows, err := mysql.db.QueryContext(ctx, query, userId)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	projectList := []*model.ProjectModel{}
+
+	for rows.Next() {
+		project := &model.ProjectModel{}
+		err := rows.Scan(&project.Id, &project.Name, &project.Desc)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		projectList = append(projectList, project)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return projectList, http.StatusOK, nil
+}

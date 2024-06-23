@@ -68,6 +68,7 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 	routes.HandleFunc("/delete-from-table", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
 
 	// TODO: list of projects
+	routes.HandleFunc("/retrieve-project-list", apiServer.RetrieveProjectList).Methods(http.MethodPost)
 
 	//logger.Printf("Server started at port: %v", 8090)
 
@@ -94,11 +95,11 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
 	apiServer.logger.Debugf("Received Create-New-Project request")
 	w.Header().Set("Content-Type", common.JSONApplicationType)
-	tokenString := req.Header.Get("Authorization")
 	resultStatus := &model.ResultStatus{}
 
 	w.WriteHeader(http.StatusOK)
 
+	tokenString := req.Header.Get("Authorization")
 	if tokenString == "" {
 		resultStatus.Message = fmt.Errorf("token not provided").Error()
 		resultStatus.Status = common.FAILED
@@ -548,6 +549,51 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	resultStatus.Status = common.SUCCESS
+	w.Header().Set("Content-Type", common.JSONApplicationType)
+	json.NewEncoder(w).Encode(resultStatus)
+}
+
+func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Retrieve Project List"
+	apiServer.logger.Debugf("Received %s request", endpointName)
+
+	resultStatus := &model.ResultStatus{}
+	w.WriteHeader(http.StatusOK)
+
+	tokenString := req.Header.Get("Authorization")
+	if tokenString == "" {
+		resultStatus.Message = fmt.Errorf("token not provided").Error()
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusUnauthorized
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+	}
+	tokenString = tokenString[len("Bearer "):]
+
+	userId, err := apiServer.verifyToken(tokenString)
+	if err != nil {
+		resultStatus.Message = err.Error()
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusUnauthorized
+		json.NewEncoder(w).Encode(resultStatus)
+
+		return
+	}
+
+	projects, statusCode, err := apiServer.database.RetrieveProjectList(context.Background(), userId)
+	if err != nil {
+		resultStatus.Message = err.Error()
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = statusCode
+		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+
+	}
+	resultStatus.Status = common.SUCCESS
+	resultStatus.Data = projects
+	resultStatus.StatusCode = http.StatusOK
+
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	json.NewEncoder(w).Encode(resultStatus)
 }
