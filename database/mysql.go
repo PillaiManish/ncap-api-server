@@ -193,25 +193,31 @@ func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateT
 	return http.StatusOK, nil
 }
 
-func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, int, error) {
-	query := "SELECT DISPLAY_NAME FROM project_metadata WHERE project_id = ?"
-	tableNameList := []string{}
+func (mysql *MySql) RetrieveTableListFromMetaData(ctx context.Context, projectId string) ([]*model.CreateTableModel, int, error) {
+	query := "SELECT METADATA FROM project_metadata WHERE project_id = ?"
+	tables := []*model.CreateTableModel{}
 
 	rows, err := mysql.db.QueryContext(ctx, query, projectId)
 	if err != nil {
-		return tableNameList, http.StatusInternalServerError, err
+		return nil, http.StatusInternalServerError, err
 	}
 
 	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			return tableNameList, http.StatusInternalServerError, err
+		metaData := ""
+		if err := rows.Scan(&metaData); err != nil {
+			return nil, http.StatusInternalServerError, err
 		}
 
-		tableNameList = append(tableNameList, tableName)
+		retrieveTableList := &model.CreateTableModel{}
+		err := json.Unmarshal([]byte(metaData), retrieveTableList)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		tables = append(tables, retrieveTableList)
 
 	}
-	return tableNameList, http.StatusOK, nil
+	return tables, http.StatusOK, nil
 }
 
 func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error) {

@@ -443,7 +443,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 
 	}
 
-	tableList, statusCode, err := apiServer.database.SelectTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
+	tableList, statusCode, err := apiServer.database.RetrieveTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
