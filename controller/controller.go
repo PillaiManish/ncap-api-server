@@ -68,7 +68,7 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 	routes.HandleFunc("/delete-from-table", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
 
 	// TODO: list of projects
-	routes.HandleFunc("/retrieve-project-list", apiServer.RetrieveProjectList).Methods(http.MethodPost)
+	routes.HandleFunc("/retrieve-project-list", apiServer.RetrieveProjectList).Methods(http.MethodGet)
 
 	//logger.Printf("Server started at port: %v", 8090)
 
@@ -408,7 +408,8 @@ func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Requ
 }
 
 func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Retrieve-Table-List request")
+	endpoint := "Retrieve - Table - List"
+	apiServer.logger.Debugf("Received %s request", endpoint)
 
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
@@ -426,15 +427,26 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusBadRequest
 		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
-	tableList, err := apiServer.database.SelectTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
+	if retrieveTableListModel.ProjectId == "" {
+		resultStatus.Message = fmt.Errorf("project id cannot be null").Error()
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusBadRequest
+		json.NewEncoder(w).Encode(resultStatus)
+		return
+
+	}
+
+	tableList, statusCode, err := apiServer.database.SelectTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = statusCode
 		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
 		//http.Error(w, err.Error(), http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resultStatus)
@@ -442,6 +454,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 	}
 	resultStatus.Data = tableList
 	resultStatus.Status = common.SUCCESS
+	resultStatus.StatusCode = http.StatusOK
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	json.NewEncoder(w).Encode(resultStatus)
 	return

@@ -193,25 +193,25 @@ func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateT
 	return http.StatusOK, nil
 }
 
-func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error) {
+func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, int, error) {
 	query := "SELECT DISPLAY_NAME FROM project_metadata WHERE project_id = ?"
 	tableNameList := []string{}
 
 	rows, err := mysql.db.QueryContext(ctx, query, projectId)
 	if err != nil {
-		return tableNameList, err
+		return tableNameList, http.StatusInternalServerError, err
 	}
 
 	for rows.Next() {
 		var tableName string
 		if err := rows.Scan(&tableName); err != nil {
-			return tableNameList, err
+			return tableNameList, http.StatusInternalServerError, err
 		}
 
 		tableNameList = append(tableNameList, tableName)
 
 	}
-	return tableNameList, nil
+	return tableNameList, http.StatusOK, nil
 }
 
 func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error) {
