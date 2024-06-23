@@ -294,18 +294,22 @@ func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.Delet
 	return nil
 }
 
-func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) error {
+func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) (int64, error) {
 	query := "INSERT INTO users (name, email, password) value (?, ?, ?)"
 
-	_, err := mysql.db.ExecContext(ctx, query, model.Name, model.Email, model.Password)
+	res, err := mysql.db.ExecContext(ctx, query, model.Name, model.Email, model.Password)
 	if err != nil {
 		var mysqlErr *mysqlLib.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-			return fmt.Errorf("user already exists, please log in")
+			return -1, fmt.Errorf("user already exists, please log in")
 		}
-		return err
+		return -1, err
 	}
-	return nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return -1, fmt.Errorf("error registration user")
+	}
+	return id, nil
 }
 
 func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int, error) {

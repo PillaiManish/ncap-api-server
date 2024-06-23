@@ -204,7 +204,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 
 	newUser.Password = string(encryptPasswd)
 
-	err = apiServer.database.RegisterUser(context.Background(), newUser)
+	userId, err := apiServer.database.RegisterUser(context.Background(), newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
@@ -214,6 +214,18 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 
 		return
 	}
+
+	token, err := apiServer.createToken(newUser.Email, int(userId))
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		resultStatus.Error = err.Error()
+		resultStatus.Status = common.FAILED
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resultStatus)
+	}
+	resultStatus.Data = token
+	resultStatus.Status = common.SUCCESS
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
 
 	resultStatus.Status = common.SUCCESS
 	w.Header().Set("Content-Type", common.JSONApplicationType)
