@@ -7,14 +7,14 @@ import (
 )
 
 type Database interface {
-	RegisterUser(ctx context.Context, model *model.UserModel) (int64, error)
-	LoginUser(ctx context.Context, model *model.UserModel) (int, error)
+	RegisterUser(ctx context.Context, model *model.UserModel) (int64, int, error)
+	LoginUser(ctx context.Context, model *model.UserModel) (int, int, error)
 
 	CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) error
-	CreateTable(ctx context.Context, model *model.CreateTableModel) error
+	CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error)
 	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
 	DropTable(ctx context.Context, model *model.DropTableModel) error
-	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) error
+	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) (int, error)
 	SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error)
 	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)
 	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error

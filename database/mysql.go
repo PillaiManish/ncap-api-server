@@ -12,6 +12,7 @@ import (
 	mysqlLib "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 	"ncap-api-server/model"
+	"net/http"
 	"os"
 )
 
@@ -92,7 +93,7 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 	return nil
 }
 
-func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) error {
+func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error) {
 	// Query Generation
 
 	query := fmt.Sprintf("CREATE TABLE %s", model.TableName)
@@ -126,10 +127,10 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 
 	_, err := mysql.db.ExecContext(ctx, query)
 	if err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 
-	return nil
+	return http.StatusCreated, nil
 }
 
 func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error {
@@ -177,19 +178,19 @@ func (mysql *MySql) DropTable(ctx context.Context, model *model.DropTableModel) 
 	return nil
 }
 
-func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) error {
+func (mysql *MySql) InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) (int, error) {
 	query := "INSERT INTO project_metadata (project_id, display_name, table_name, metadata) values (?, ?, ?, ?)"
 
 	data, err := json.Marshal(model)
 	if err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 
 	_, err = mysql.db.ExecContext(ctx, query, projectId, model.DisplayName, model.TableName, data)
 	if err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
-	return nil
+	return http.StatusOK, nil
 }
 
 func (mysql *MySql) SelectTableListFromMetaData(ctx context.Context, projectId string) ([]string, error) {
@@ -294,25 +295,25 @@ func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.Delet
 	return nil
 }
 
-func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) (int64, error) {
+func (mysql *MySql) RegisterUser(ctx context.Context, model *model.UserModel) (int64, int, error) {
 	query := "INSERT INTO users (name, email, password) value (?, ?, ?)"
 
 	res, err := mysql.db.ExecContext(ctx, query, model.Name, model.Email, model.Password)
 	if err != nil {
 		var mysqlErr *mysqlLib.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-			return -1, fmt.Errorf("user already exists, please log in")
+			return -1, http.StatusConflict, fmt.Errorf("user already exists, please log in")
 		}
-		return -1, err
+		return -1, http.StatusInternalServerError, err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return -1, fmt.Errorf("error registration user")
+		return -1, http.StatusInternalServerError, fmt.Errorf("error registration user")
 	}
-	return id, nil
+	return id, http.StatusCreated, nil
 }
 
-func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int, error) {
+func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int, int, error) {
 	query := "SELECT id, email, password FROM users where email = ?"
 
 	userId, email, password := -1, "", ""
@@ -320,16 +321,16 @@ func (mysql *MySql) LoginUser(ctx context.Context, model *model.UserModel) (int,
 
 	if err := row.Scan(&userId, &email, &password); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return -1, nil
+			return -1, http.StatusNotFound, fmt.Errorf("user not registered")
 		}
-		return -1, err
+		return -1, http.StatusInternalServerError, err
 	}
 
 	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(model.Password))
 	if err != nil {
-		return -1, fmt.Errorf("invalid password")
+		return -1, http.StatusUnauthorized, fmt.Errorf("invalid password")
 	}
 
-	return userId, nil
+	return userId, http.StatusAccepted, nil
 
 }

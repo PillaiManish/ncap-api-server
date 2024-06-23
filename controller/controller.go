@@ -94,10 +94,12 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	tokenString := req.Header.Get("Authorization")
 	resultStatus := &model.ResultStatus{}
 
+	w.WriteHeader(http.StatusOK)
+
 	if tokenString == "" {
 		resultStatus.Error = fmt.Errorf("token not provided").Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusUnauthorized
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -107,7 +109,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusUnauthorized
 		json.NewEncoder(w).Encode(resultStatus)
 
 		return
@@ -119,7 +121,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -129,7 +131,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 
@@ -157,12 +159,13 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
+	w.WriteHeader(http.StatusOK)
 
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		//http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -174,11 +177,8 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
-
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -187,7 +187,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -197,19 +197,19 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = http.StatusInternalServerError
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
 	newUser.Password = string(encryptPasswd)
 
-	userId, err := apiServer.database.RegisterUser(context.Background(), newUser)
+	userId, statusCode, err := apiServer.database.RegisterUser(context.Background(), newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = statusCode
 		json.NewEncoder(w).Encode(resultStatus)
 
 		return
@@ -220,11 +220,12 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = http.StatusInternalServerError
 		json.NewEncoder(w).Encode(resultStatus)
 	}
 	resultStatus.Data = token
 	resultStatus.Status = common.SUCCESS
+	resultStatus.StatusCode = http.StatusCreated
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
 
 	resultStatus.Status = common.SUCCESS
@@ -239,11 +240,13 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 	body, err := io.ReadAll(req.Body)
 	resultStatus := &model.ResultStatus{}
 
+	w.WriteHeader(http.StatusOK)
+
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 
 		//http.Error(w, err.Error(), http.StatusBadRequest)
@@ -256,7 +259,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -266,29 +269,19 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusBadRequest)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
-	userId, err := apiServer.database.LoginUser(context.Background(), checkUser)
+	userId, statusCode, err := apiServer.database.LoginUser(context.Background(), checkUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = statusCode
 		json.NewEncoder(w).Encode(resultStatus)
 
-		return
-	}
-
-	if userId == -1 {
-		err := fmt.Errorf("user not registered")
-		apiServer.logger.Warnf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Status = common.FAILED
-		resultStatus.Message = "user not registered"
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
@@ -297,11 +290,13 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		w.WriteHeader(http.StatusInternalServerError)
+		resultStatus.StatusCode = http.StatusInternalServerError
 		json.NewEncoder(w).Encode(resultStatus)
 	}
 	resultStatus.Data = token
 	resultStatus.Status = common.SUCCESS
+	resultStatus.StatusCode = http.StatusOK
+
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
 
 	w.Header().Set("Content-Type", common.JSONApplicationType)
@@ -311,6 +306,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 
 func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http.Request) {
 	apiServer.logger.Debugf("Received Create-New-Table request")
+	w.WriteHeader(http.StatusOK)
 
 	body, err := io.ReadAll(req.Body)
 	//fmt.Printf("Received %s", string(body))
@@ -324,6 +320,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -333,7 +330,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
+		resultStatus.StatusCode = http.StatusBadRequest
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
@@ -341,28 +338,27 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 	tableModel.TableName = CreateTableNameFromName(tableModel.DisplayName, projectId)
 
 	ctx := context.Background()
-	err = apiServer.database.CreateTable(ctx, tableModel)
+	statusCode, err := apiServer.database.CreateTable(ctx, tableModel)
 	if err != nil {
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
+		resultStatus.StatusCode = statusCode
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
-	err = apiServer.database.InsertIntoMetaData(ctx, tableModel, projectId)
+	statusCode, err = apiServer.database.InsertIntoMetaData(ctx, tableModel, projectId)
 	if err != nil {
 
 		resultStatus.Error = err.Error()
 		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
+		resultStatus.StatusCode = statusCode
 		json.NewEncoder(w).Encode(resultStatus)
 		return
 	}
 
 	resultStatus.Status = common.SUCCESS
+	resultStatus.StatusCode = http.StatusCreated
 	w.Header().Set("Content-Type", common.JSONApplicationType)
 	json.NewEncoder(w).Encode(resultStatus)
 	return
