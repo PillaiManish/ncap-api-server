@@ -19,6 +19,7 @@ type Database interface {
 	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)
 	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error
 	RetrieveProjectList(ctx context.Context, userId int) ([]*model.ProjectModel, int, error)
+	Close() error
 }
 
 func NewDatabase(config *model.DatabaseConfig) (Database, error) {

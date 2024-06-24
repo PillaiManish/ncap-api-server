@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"ncap-api-server/controller"
@@ -15,6 +16,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	ctx := context.Background()
 
 	config := &model.Config{}
 	err = yaml.Unmarshal(data, config)
@@ -29,7 +31,7 @@ func main() {
 	}
 	logger.SetLevel(logLevel)
 
-	err = controller.NewApiServer(logger, config)
+	err = controller.NewApiServer(ctx, logger, config)
 	if err != nil {
 		logger.Fatal(err)
 	}

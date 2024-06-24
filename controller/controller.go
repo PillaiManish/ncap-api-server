@@ -15,8 +15,11 @@ import (
 	"ncap-api-server/model"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 )
 
@@ -34,13 +37,14 @@ type (
 		logger   *logrus.Logger
 		database database.Database
 		config   *model.Config
+		ctx      context.Context
 	}
 )
 
 //var secretKey = []byte("secret-key")
 
-func NewApiServer(logger *logrus.Logger, config *model.Config) error {
-	apiServer := &APIServerModel{logger: logger, config: config}
+func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Config) error {
+	apiServer := &APIServerModel{logger: logger, config: config, ctx: ctx}
 
 	routes := mux.NewRouter()
 
@@ -53,6 +57,16 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 		logger.Fatalf("database connection return empty database")
 	}
 	apiServer.database = newDB
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			logger.Debugf("closing database connection")
+			apiServer.database.Close()
+			return
+
+		}
+	}()
 
 	// Authentication
 	routes.HandleFunc("/login", apiServer.LoginUser).Methods(http.MethodPost)
@@ -83,13 +97,53 @@ func NewApiServer(logger *logrus.Logger, config *model.Config) error {
 
 	origins := handlers.AllowedOrigins(allowedOrigins)
 	logger.Infof("ncap-api-server starting at port: %v", 8080)
-	err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
-	//err = http.ListenAndServe(":8080", routes)
-	if err != nil {
-		logger.Fatalf("ncap-api-server failed to start due to err: %s", err.Error())
-	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
+		//err = http.ListenAndServe(":8080", routes)
+		if err != nil {
+			logger.Fatalf("ncap-api-server failed to start due to err: %s", err.Error())
+		}
+	}()
+
+	exitChan := SystemSignalHandling
+	code := <-exitChan()
+
+	logger.Debugf("Received signal to stop: %v", code)
+	apiServer.Stop()
+
+	wg.Wait()
 
 	return nil
+}
+
+func SystemSignalHandling() chan int {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+
+	exitChan := make(chan int, 1)
+
+	select {
+	case s := <-signalChan:
+		switch s {
+		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+			exitChan <- 0
+		default:
+			println("unknown signal")
+			exitChan <- 1
+		}
+	}
+	return exitChan
+}
+
+func (apiServer *APIServerModel) Stop() {
+	apiServer.database.Close()
+	apiServer.logger.Debugf("db closed and closed api-server")
+	apiServer.logger.Exit(1)
 }
 
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
@@ -143,7 +197,7 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 
 	project.UserId = userId
 
-	statusCode, err := apiServer.database.CreateNewProject(context.Background(), project, apiServer.config.ProjectConfig.Limit)
+	statusCode, err := apiServer.database.CreateNewProject(apiServer.ctx, project, apiServer.config.ProjectConfig.Limit)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
@@ -209,7 +263,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 
 	newUser.Password = string(encryptPasswd)
 
-	userId, statusCode, err := apiServer.database.RegisterUser(context.Background(), newUser)
+	userId, statusCode, err := apiServer.database.RegisterUser(apiServer.ctx, newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Message = err.Error()
@@ -279,7 +333,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	userId, statusCode, err := apiServer.database.LoginUser(context.Background(), checkUser)
+	userId, statusCode, err := apiServer.database.LoginUser(apiServer.ctx, checkUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		resultStatus.Message = err.Error()
@@ -392,7 +446,7 @@ func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	err = apiServer.database.DropTable(context.Background(), tableModel)
+	err = apiServer.database.DropTable(apiServer.ctx, tableModel)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
@@ -443,7 +497,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 
 	}
 
-	tableList, statusCode, err := apiServer.database.RetrieveTableListFromMetaData(context.Background(), retrieveTableListModel.ProjectId)
+	tableList, statusCode, err := apiServer.database.RetrieveTableListFromMetaData(apiServer.ctx, retrieveTableListModel.ProjectId)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
@@ -517,7 +571,7 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	columns, data, err := apiServer.database.RetrieveDataFromTable(context.Background(), tableModel)
+	columns, data, err := apiServer.database.RetrieveDataFromTable(apiServer.ctx, tableModel)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
@@ -555,7 +609,7 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	err = apiServer.database.DeleteEntryFromTable(context.Background(), tableModel)
+	err = apiServer.database.DeleteEntryFromTable(apiServer.ctx, tableModel)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED
@@ -594,7 +648,7 @@ func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req 
 		return
 	}
 
-	projects, statusCode, err := apiServer.database.RetrieveProjectList(context.Background(), userId)
+	projects, statusCode, err := apiServer.database.RetrieveProjectList(apiServer.ctx, userId)
 	if err != nil {
 		resultStatus.Message = err.Error()
 		resultStatus.Status = common.FAILED

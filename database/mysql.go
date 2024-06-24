@@ -202,6 +202,8 @@ func (mysql *MySql) RetrieveTableListFromMetaData(ctx context.Context, projectId
 		return nil, http.StatusInternalServerError, err
 	}
 
+	defer rows.Close()
+
 	for rows.Next() {
 		metaData := ""
 		if err := rows.Scan(&metaData); err != nil {
@@ -247,6 +249,9 @@ func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.Retr
 		return columns, rowData, err
 	}
 	results := []map[string]interface{}{}
+
+	defer rows.Close()
+
 	for rows.Next() {
 		columnPointers := make([]interface{}, len(columns))
 		columnValues := make([]interface{}, len(columns))
@@ -351,6 +356,8 @@ func (mysql *MySql) RetrieveProjectList(ctx context.Context, userId int) ([]*mod
 
 	projectList := []*model.ProjectModel{}
 
+	defer rows.Close()
+
 	for rows.Next() {
 		project := &model.ProjectModel{}
 		err := rows.Scan(&project.Id, &project.Name, &project.Desc)
@@ -364,4 +371,13 @@ func (mysql *MySql) RetrieveProjectList(ctx context.Context, userId int) ([]*mod
 		return nil, http.StatusInternalServerError, err
 	}
 	return projectList, http.StatusOK, nil
+}
+
+func (mysql *MySql) Close() error {
+	err := mysql.db.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
