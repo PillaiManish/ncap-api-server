@@ -219,18 +219,9 @@ func (apiServer *APIServerModel) Response(w http.ResponseWriter, code int, paylo
 func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Create New Project"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	w.Header().Set("Content-Type", common.JSONApplicationType)
 
 	tokenString := req.Header.Get("Authorization")
-	if tokenString == "" {
-		err := fmt.Errorf("invalid token")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-	tokenString = tokenString[len("Bearer "):]
-
-	userId, err := apiServer.verifyToken(tokenString)
+	userId, err := apiServer.Authorization(w, tokenString, endpointName)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusUnauthorized, err.Error())
@@ -238,7 +229,6 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	}
 
 	body, err := io.ReadAll(req.Body)
-
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
@@ -369,7 +359,19 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 	endpointName := "Create-New-Table"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
 	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+	}
 
 	params := req.URL.Query()
 	paramsProjectId := params.Get("project_id")
@@ -414,8 +416,16 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Drop Table"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
 
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -446,8 +456,15 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 	endpointName := "Retrieve Table List"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 
-	body, err := io.ReadAll(req.Body)
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
 
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
@@ -484,8 +501,16 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Insert Into Table"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
 
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
@@ -512,8 +537,16 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Retrieve Data Table List"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
 
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
@@ -545,8 +578,16 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req *http.Request) {
 	endpointName := " Delete Entry"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
 
+	tokenString := req.Header.Get("Authorization")
+	_, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
@@ -569,20 +610,28 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	apiServer.Response(w, http.StatusOK, nil)
 }
 
+func (apiServer *APIServerModel) Authorization(w http.ResponseWriter, authorizationHeader, endpointName string) (int, error) {
+
+	if authorizationHeader == "" {
+		err := fmt.Errorf("missing Authorization header")
+		return -1, err
+	}
+
+	tokenString := authorizationHeader[len("Bearer "):]
+
+	userId, err := apiServer.verifyToken(tokenString)
+	if err != nil {
+		return -1, err
+	}
+
+	return userId, nil
+}
 func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Retrieve Project List"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 
 	tokenString := req.Header.Get("Authorization")
-	if tokenString == "" {
-		err := fmt.Errorf("missing Authorization header")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-	tokenString = tokenString[len("Bearer "):]
-
-	userId, err := apiServer.verifyToken(tokenString)
+	userId, err := apiServer.Authorization(w, tokenString, endpointName)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusUnauthorized, err.Error())
