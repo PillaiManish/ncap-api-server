@@ -284,7 +284,7 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 14)
+	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 1)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
