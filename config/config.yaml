@@ -1,3 +1,4 @@
+errorDataResponse: true
 adminPanelUrl: "*"
 logLevel: DEBUG
 projectConfig:

@@ -2,11 +2,12 @@ package model
 
 type (
 	Config struct {
-		LogLevel      string          `yaml:"logLevel,omitempty" json:"logLevel,omitempty"`
-		AdminPanelUrl string          `yaml:"adminPanelUrl,omitempty" json:"adminPanelUrl,omitempty"`
-		Database      *DatabaseConfig `yaml:"database,omitempty" json:"database,omitempty"`
-		ProjectConfig *ProjectConfig  `yaml:"projectConfig,omitempty" json:"projectConfig,omitempty"`
-		JWT           *JWT            `yaml:"jwt,omitempty" json:"jwt,omitempty"`
+		ErrorDataResponse bool            `json:"errorDataResponse,omitempty" yaml:"errorDataResponse,omitempty"`
+		LogLevel          string          `yaml:"logLevel,omitempty" json:"logLevel,omitempty"`
+		AdminPanelUrl     string          `yaml:"adminPanelUrl,omitempty" json:"adminPanelUrl,omitempty"`
+		Database          *DatabaseConfig `yaml:"database,omitempty" json:"database,omitempty"`
+		ProjectConfig     *ProjectConfig  `yaml:"projectConfig,omitempty" json:"projectConfig,omitempty"`
+		JWT               *JWT            `yaml:"jwt,omitempty" json:"jwt,omitempty"`
 	}
 
 	ProjectConfig struct {

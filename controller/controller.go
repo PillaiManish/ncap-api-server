@@ -146,87 +146,136 @@ func (apiServer *APIServerModel) Stop() {
 	apiServer.logger.Exit(1)
 }
 
-func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Create-New-Project request")
-	w.Header().Set("Content-Type", common.JSONApplicationType)
+func (apiServer *APIServerModel) Response(w http.ResponseWriter, code int, payload interface{}) {
 	resultStatus := &model.ResultStatus{}
 
-	w.WriteHeader(http.StatusOK)
+	switch code {
+	case http.StatusOK:
+		resultStatus.Status = common.SUCCESS
+		resultStatus.StatusCode = http.StatusOK
+		resultStatus.Message = "Processed successfully"
+		resultStatus.Data = payload
+		w.WriteHeader(http.StatusOK)
+	case http.StatusBadRequest:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusBadRequest
+		resultStatus.Message = "Invalid request"
+
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	case http.StatusUnauthorized:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusUnauthorized
+		resultStatus.Message = "Unauthorized"
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	case http.StatusNotFound:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusNotFound
+		resultStatus.Message = "Not found"
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusNotFound)
+	case http.StatusInternalServerError:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusInternalServerError
+		resultStatus.Message = "Internal server error"
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	case http.StatusConflict:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusConflict
+		resultStatus.Message = "Conflict"
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusConflict)
+	case http.StatusCreated:
+		resultStatus.Status = common.SUCCESS
+		resultStatus.StatusCode = http.StatusCreated
+		resultStatus.Message = "Processed successfully"
+		resultStatus.Data = payload
+		w.WriteHeader(http.StatusCreated)
+	default:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusInternalServerError
+		resultStatus.Message = "Internal server error"
+		if apiServer.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	json.NewEncoder(w).Encode(resultStatus)
+	return
+}
+func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Create New Project"
+	apiServer.logger.Debugf("Received %s request", endpointName)
+	w.Header().Set("Content-Type", common.JSONApplicationType)
 
 	tokenString := req.Header.Get("Authorization")
 	if tokenString == "" {
-		resultStatus.Message = fmt.Errorf("token not provided").Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusUnauthorized
-		json.NewEncoder(w).Encode(resultStatus)
+		err := fmt.Errorf("invalid token")
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	tokenString = tokenString[len("Bearer "):]
 
 	userId, err := apiServer.verifyToken(tokenString)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusUnauthorized
-		json.NewEncoder(w).Encode(resultStatus)
-
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	body, err := io.ReadAll(req.Body)
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	project := &model.ProjectModel{}
 	err = json.Unmarshal(body, project)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
-
 	}
 
 	project.UserId = userId
 
 	statusCode, err := apiServer.database.CreateNewProject(apiServer.ctx, project, apiServer.config.ProjectConfig.Limit)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
-	resultStatus.Status = common.SUCCESS
-	resultStatus.StatusCode = http.StatusOK
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, statusCode, nil)
+	return
 
 }
 
 func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Login"
+	endpointName := "Register"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
-	w.WriteHeader(http.StatusOK)
 
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -234,30 +283,21 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 	err = json.Unmarshal(body, newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if newUser.Name == "" || newUser.Password == "" || newUser.Email == "" {
 		err := fmt.Errorf("name/password/email cannot be empty")
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 14)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusInternalServerError
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -266,49 +306,29 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 	userId, statusCode, err := apiServer.database.RegisterUser(apiServer.ctx, newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		json.NewEncoder(w).Encode(resultStatus)
-
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
 	token, err := apiServer.createToken(newUser.Email, int(userId))
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusInternalServerError
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	resultStatus.Data = token
-	resultStatus.Status = common.SUCCESS
-	resultStatus.StatusCode = http.StatusCreated
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-
-	resultStatus.Status = common.SUCCESS
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
-
+	apiServer.Response(w, http.StatusCreated, token)
+	return
 }
 
 func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Login"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
-
-	w.WriteHeader(http.StatusOK)
 
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
-
-		//http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -316,360 +336,276 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 	err = json.Unmarshal(body, checkUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if checkUser.Password == "" || checkUser.Email == "" {
 		err := fmt.Errorf("email/password cannot be empty")
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	userId, statusCode, err := apiServer.database.LoginUser(apiServer.ctx, checkUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		json.NewEncoder(w).Encode(resultStatus)
-
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
 	token, err := apiServer.createToken(checkUser.Email, userId)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusInternalServerError
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 	}
-	resultStatus.Data = token
-	resultStatus.Status = common.SUCCESS
-	resultStatus.StatusCode = http.StatusOK
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
-
+	apiServer.Response(w, http.StatusOK, token)
+	return
 }
 
 func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Create-New-Table request")
-	w.WriteHeader(http.StatusOK)
+	endpointName := "Create-New-Table"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 
 	body, err := io.ReadAll(req.Body)
-	//fmt.Printf("Received %s", string(body))
-	resultStatus := &model.ResultStatus{}
 
 	params := req.URL.Query()
-	project_id := params.Get("project_id")
+	paramsProjectId := params.Get("project_id")
 
-	projectId, err := strconv.Atoi(project_id)
+	projectId, err := strconv.Atoi(paramsProjectId)
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	tableModel := &model.CreateTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	tableModel.TableName = CreateTableNameFromName(tableModel.DisplayName, projectId)
 
-	ctx := context.Background()
-	statusCode, err := apiServer.database.CreateTable(ctx, tableModel)
+	statusCode, err := apiServer.database.CreateTable(apiServer.ctx, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
-	statusCode, err = apiServer.database.InsertIntoMetaData(ctx, tableModel, projectId)
+	statusCode, err = apiServer.database.InsertIntoMetaData(apiServer.ctx, tableModel, projectId)
 	if err != nil {
-
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
-	resultStatus.Status = common.SUCCESS
-	resultStatus.StatusCode = http.StatusCreated
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusCreated, nil)
+
 	return
 }
 
 func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Drop-Table request")
+	endpointName := "Drop Table"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	tableModel := &model.DropTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	err = apiServer.database.DropTable(apiServer.ctx, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	resultStatus.Status = common.SUCCESS
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, nil)
 	return
 }
 
 func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request) {
-	endpoint := "Retrieve - Table - List"
-	apiServer.logger.Debugf("Received %s request", endpoint)
+	endpointName := "Retrieve Table List"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	retrieveTableListModel := &model.RetrieveTableListModel{}
 	err = json.Unmarshal(body, retrieveTableListModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if retrieveTableListModel.ProjectId == "" {
-		resultStatus.Message = fmt.Errorf("project id cannot be null").Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusBadRequest
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 
 	}
 
 	tableList, statusCode, err := apiServer.database.RetrieveTableListFromMetaData(apiServer.ctx, retrieveTableListModel.ProjectId)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		//http.Error(w, err.Error(), http.StatusBadRequest)
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
-	resultStatus.Data = tableList
-	resultStatus.Status = common.SUCCESS
-	resultStatus.StatusCode = http.StatusOK
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, tableList)
 	return
 }
 
 func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Insert-Into-Table request")
+	endpointName := "Insert Into Table"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
 	tableModel := &model.InsertIntoTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
-	ctx := context.Background()
-	err = apiServer.database.InsertIntoTable(ctx, tableModel)
+	err = apiServer.database.InsertIntoTable(apiServer.ctx, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 	}
 
-	resultStatus.Status = common.SUCCESS
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, nil)
+	return
 }
 
 func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Data Table request")
+	endpointName := "Retrieve Data Table List"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
 	tableModel := &model.RetrieveDataFromTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
 	columns, data, err := apiServer.database.RetrieveDataFromTable(apiServer.ctx, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 	}
-	resultStatus.Data = map[string]interface{}{
+
+	resultData := map[string]interface{}{
 		"columns": columns,
 		"rows":    data,
 	}
 
-	resultStatus.Status = common.SUCCESS
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, resultData)
+	return
 }
 
 func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req *http.Request) {
-	apiServer.logger.Debugf("Received Delete-Entry request")
+	endpointName := " Delete Entry"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 	body, err := io.ReadAll(req.Body)
-	resultStatus := &model.ResultStatus{}
 
 	if err != nil {
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
 	tableModel := &model.DeleteEntryFromTableModel{}
 	err = json.Unmarshal(body, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 	}
 
 	err = apiServer.database.DeleteEntryFromTable(apiServer.ctx, tableModel)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
 	}
-	resultStatus.Status = common.SUCCESS
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, nil)
 }
 
 func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {
 	endpointName := "Retrieve Project List"
 	apiServer.logger.Debugf("Received %s request", endpointName)
 
-	resultStatus := &model.ResultStatus{}
-	w.WriteHeader(http.StatusOK)
-
 	tokenString := req.Header.Get("Authorization")
 	if tokenString == "" {
-		resultStatus.Message = fmt.Errorf("token not provided").Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusUnauthorized
-		json.NewEncoder(w).Encode(resultStatus)
+		err := fmt.Errorf("missing Authorization header")
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	tokenString = tokenString[len("Bearer "):]
 
 	userId, err := apiServer.verifyToken(tokenString)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = http.StatusUnauthorized
-		json.NewEncoder(w).Encode(resultStatus)
-
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	projects, statusCode, err := apiServer.database.RetrieveProjectList(apiServer.ctx, userId)
 	if err != nil {
-		resultStatus.Message = err.Error()
-		resultStatus.Status = common.FAILED
-		resultStatus.StatusCode = statusCode
-		//apiServer.logger.Printf("common.FAILED to read body due to err: %s", err)
-		json.NewEncoder(w).Encode(resultStatus)
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
 		return
 
 	}
-	resultStatus.Status = common.SUCCESS
-	resultStatus.Data = projects
-	resultStatus.StatusCode = http.StatusOK
 
-	w.Header().Set("Content-Type", common.JSONApplicationType)
-	json.NewEncoder(w).Encode(resultStatus)
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, projects)
+	return
 }
 
 func (apiServer *APIServerModel) createToken(email string, userId int) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			"email":  email,
+			//"email":  email,
 			"userId": userId,
 			"exp":    time.Now().Add(time.Hour * 24).Unix(),
 		})
