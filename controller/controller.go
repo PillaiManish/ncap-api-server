@@ -300,7 +300,9 @@ func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	token, err := apiServer.createToken(newUser.Email, int(userId))
+	newUser.Id = int(userId)
+
+	token, err := apiServer.createToken(newUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -337,14 +339,14 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	userId, statusCode, err := apiServer.database.LoginUser(apiServer.ctx, checkUser)
+	userModel, statusCode, err := apiServer.database.LoginUser(apiServer.ctx, checkUser)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, statusCode, err.Error())
 		return
 	}
 
-	token, err := apiServer.createToken(checkUser.Email, userId)
+	token, err := apiServer.createToken(userModel)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -651,11 +653,13 @@ func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req 
 	return
 }
 
-func (apiServer *APIServerModel) createToken(email string, userId int) (string, error) {
+func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			//"email":  email,
-			"userId": userId,
+			"id":     userModel.Id,
+			"name":   userModel.Name,
+			"email":  userModel.Email,
+			"userId": userModel.Id,
 			"exp":    time.Now().Add(time.Hour * 24).Unix(),
 		})
 

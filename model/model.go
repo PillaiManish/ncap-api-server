@@ -2,6 +2,7 @@ package model
 
 type (
 	UserModel struct {
+		Id       int    `json:"id,omitempty"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 		Name     string `json:"name"`
