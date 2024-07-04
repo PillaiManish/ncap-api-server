@@ -329,14 +329,15 @@ func (mysql *MySql) LoginUser(ctx context.Context, userModel *model.UserModel) (
 
 	row := mysql.db.QueryRowContext(ctx, query, userModel.Email)
 
-	if err := row.Scan(&userModel.Id, &userModel.Password, &userModel.Name); err != nil {
+	hashedPassword := ""
+	if err := row.Scan(&userModel.Id, &hashedPassword, &userModel.Name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return userModel, http.StatusNotFound, fmt.Errorf("user not registered")
 		}
 		return userModel, http.StatusInternalServerError, err
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(userModel.Password))
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(userModel.Password))
 	if err != nil {
 		return userModel, http.StatusUnauthorized, fmt.Errorf("invalid password")
 	}

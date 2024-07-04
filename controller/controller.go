@@ -24,7 +24,11 @@ import (
 )
 
 type JwtClaims struct {
-	UserID int `json:"userId"`
+	UserID   int    `json:"id"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+
 	jwt.RegisteredClaims
 	//jwt.StandardClaims
 }
@@ -656,11 +660,10 @@ func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req 
 func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			"id":     userModel.Id,
-			"name":   userModel.Name,
-			"email":  userModel.Email,
-			"userId": userModel.Id,
-			"exp":    time.Now().Add(time.Hour * 24).Unix(),
+			"id":    userModel.Id,
+			"name":  userModel.Name,
+			"email": userModel.Email,
+			"exp":   time.Now().Add(time.Hour * 24).Unix(),
 		})
 
 	tokenString, err := token.SignedString(apiServer.config.JWT.Secret)
