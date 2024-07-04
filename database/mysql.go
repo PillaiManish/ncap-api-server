@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	mysqlLib "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
+	"ncap-api-server/common"
 	"ncap-api-server/model"
 	"net/http"
 	"os"
@@ -103,9 +104,9 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 	i := 0
 	for columnName, columnType := range model.Columns {
 		if i == 0 {
-			columnStmt = fmt.Sprintf("%s %s", columnName, columnType)
+			columnStmt = fmt.Sprintf("`%s` %s", columnName, MapDataType(columnType, common.MYSQL))
 		} else {
-			columnStmt += "," + fmt.Sprintf("%s %s", columnName, columnType)
+			columnStmt += "," + fmt.Sprintf("`%s` %s", columnName, MapDataType(columnType, common.MYSQL))
 		}
 
 		i += 1
@@ -115,14 +116,20 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 	var primaryKeyStmt string
 	for index, primaryKey := range model.PrimaryKeys {
 		if index == 0 {
-			primaryKeyStmt = primaryKey
+			primaryKeyStmt = fmt.Sprintf("`%s`", primaryKey)
 		} else {
-			primaryKeyStmt += ", " + primaryKey
+			primaryKeyStmt += ", " + fmt.Sprintf("`%s`", primaryKey)
 		}
 	}
 
 	if query != "" {
-		query = fmt.Sprintf("%s (%s, PRIMARY KEY (%s))", query, columnStmt, primaryKeyStmt)
+		// TODO: add a default id, which would be primary key by default
+		if primaryKeyStmt == "" {
+			query = fmt.Sprintf("%s (%s)", query, columnStmt)
+
+		} else {
+			query = fmt.Sprintf("%s (%s, PRIMARY KEY (%s))", query, columnStmt, primaryKeyStmt)
+		}
 	}
 
 	_, err := mysql.db.ExecContext(ctx, query)

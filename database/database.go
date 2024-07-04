@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"ncap-api-server/common"
 	"ncap-api-server/model"
 )
 
@@ -24,10 +25,28 @@ type Database interface {
 
 func NewDatabase(config *model.DatabaseConfig) (Database, error) {
 	switch config.Type {
-	case "MySQL":
+	case common.MYSQL:
 		return NewMySQLConnection(config)
 	default:
 		return nil, fmt.Errorf("database type %s not supported", config.Type)
 	}
+}
 
+func MapDataType(dataType, databaseType string) string {
+	switch databaseType {
+	case common.MYSQL:
+		switch dataType {
+		case "text":
+			return "text"
+		case "boolean":
+			return "tinyint(1)"
+		case "int":
+			return "int"
+		default:
+			return dataType
+		}
+
+	}
+
+	return dataType
 }

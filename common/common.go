@@ -5,4 +5,5 @@ const (
 	FAILED              = "FAILED"
 	SUCCESS             = "SUCCESS"
 	ADMIN_PANEL_URL     = "ADMIN_PANEL_URL"
+	MYSQL               = "MySQL"
 )
