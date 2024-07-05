@@ -88,6 +88,9 @@ func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Conf
 	// TODO: list of projects
 	routes.HandleFunc("/retrieve-project-list", apiServer.RetrieveProjectList).Methods(http.MethodGet)
 
+	//v2
+	routes.HandleFunc("/edit-project", apiServer.EditProject).Methods(http.MethodPatch)
+
 	//logger.Printf("Server started at port: %v", 8090)
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
@@ -354,6 +357,7 @@ func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Requ
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
@@ -377,6 +381,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
 	}
 
 	params := req.URL.Query()
@@ -520,6 +525,7 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	tableModel := &model.InsertIntoTableModel{}
@@ -527,12 +533,14 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = apiServer.database.InsertIntoTable(apiServer.ctx, tableModel)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
@@ -556,6 +564,7 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	tableModel := &model.RetrieveDataFromTableModel{}
@@ -563,12 +572,14 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	columns, data, err := apiServer.database.RetrieveDataFromTable(apiServer.ctx, tableModel)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	resultData := map[string]interface{}{
@@ -597,6 +608,7 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	tableModel := &model.DeleteEntryFromTableModel{}
@@ -604,16 +616,19 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = apiServer.database.DeleteEntryFromTable(apiServer.ctx, tableModel)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
 	apiServer.Response(w, http.StatusOK, nil)
+	return
 }
 
 func (apiServer *APIServerModel) Authorization(w http.ResponseWriter, authorizationHeader, endpointName string) (int, error) {
@@ -701,4 +716,53 @@ func CreateTableNameFromName(displayName string, projectId int) string {
 	tableName = strings.ReplaceAll(tableName, " ", "_")
 
 	return fmt.Sprintf("%v_%s", projectId, tableName)
+}
+
+// v2
+func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Edit Project"
+	apiServer.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
+	}
+
+	projectModel := &model.ProjectModel{}
+	err = json.Unmarshal(body, projectModel)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if projectModel.Id == "" || projectModel.Name == "" || projectModel.Desc == "" {
+		err = fmt.Errorf("bad request")
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	projectModel.UserId = userId
+
+	statusCode, err := apiServer.database.EditProject(apiServer.ctx, projectModel)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, statusCode, err.Error())
+		return
+
+	}
+
+	apiServer.logger.Debugf("%s: successfully processed", endpointName)
+	apiServer.Response(w, http.StatusOK, nil)
+	return
 }

@@ -388,3 +388,19 @@ func (mysql *MySql) Close() error {
 
 	return nil
 }
+
+// v2
+func (mysql *MySql) EditProject(ctx context.Context, model *model.ProjectModel) (int, error) {
+	query := "UPDATE project_details SET name = ?, description = ? WHERE id = ? and user_id = ?"
+
+	_, err := mysql.db.ExecContext(ctx, query, model.Name, model.Desc, model.Id, model.UserId)
+	if err != nil {
+		var mysqlErr *mysqlLib.MySQLError
+		if errors.As(err, &mysqlErr) {
+			return http.StatusInternalServerError, err
+		}
+		return http.StatusInternalServerError, err
+	}
+
+	return http.StatusOK, nil
+}
