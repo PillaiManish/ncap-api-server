@@ -22,6 +22,7 @@ CREATE TABLE project_metadata (
     project_id int,
     display_name varchar(250),
     table_name varchar(250),
+    description varchar(250),
     metadata text,
     PRIMARY KEY (id,project_id, display_name)
 );
