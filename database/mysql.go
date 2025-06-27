@@ -175,13 +175,28 @@ func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertInto
 }
 
 func (mysql *MySql) DropTable(ctx context.Context, model *model.DropTableModel) error {
+	tx, err := mysql.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", model.TableName)
-	_, err := mysql.db.ExecContext(ctx, query)
+	_, err = tx.ExecContext(ctx, query)
 	if err != nil {
 		return err
 	}
 
-	// TODO: drop list from meta-data
+	query = fmt.Sprintf("DELETE FROM project_metadata WHERE table_name = ?")
+	_, err = tx.ExecContext(ctx, query, model.TableName)
+	if err != nil {
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
