@@ -103,8 +103,13 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 		return http.StatusInternalServerError, err
 	}
 
-	query = "INSERT INTO users_projects (user_id, project_id) VALUES (?, ?)"
-	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId)
+	query = "INSERT INTO users_projects (user_id, project_id, role, status) VALUES (?, ?, ?, ?)"
+	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId, common.OWNER, common.APPROVED)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId, common.ADMIN, common.APPROVED)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -432,23 +437,10 @@ func (mysql *MySql) EditProject(ctx context.Context, model *model.ProjectModel) 
 	return http.StatusOK, nil
 }
 
-func (mysql *MySql) CheckProjectOwner(ctx context.Context, userId int, projectId string) (int, error) {
-	query := "SELECT id FROM project_details WHERE id = ? and user_id = ?"
-	row := mysql.db.QueryRowContext(ctx, query, projectId, userId)
-	var id int
-	err := row.Scan(&id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return http.StatusNotFound, fmt.Errorf("project not found")
-		}
-		return http.StatusInternalServerError, err
-	}
-	return http.StatusOK, nil
-}
+func (mysql *MySql) CheckPermission(ctx context.Context, userId int, projectId string, role common.PERMISSION) (int, error) {
+	query := "SELECT user_id FROM users_projects WHERE user_id = ? and project_id = ? and status = ? and role = ?"
 
-func (mysql *MySql) CheckProjectUser(ctx context.Context, userId int, projectId string) (int, error) {
-	query := "SELECT user_id FROM users_projects WHERE user_id = ? and project_id = ?"
-	row := mysql.db.QueryRowContext(ctx, query, userId, projectId)
+	row := mysql.db.QueryRowContext(ctx, query, userId, projectId, common.APPROVED, role)
 	var id int
 	err := row.Scan(&id)
 	if err != nil {
@@ -458,4 +450,14 @@ func (mysql *MySql) CheckProjectUser(ctx context.Context, userId int, projectId 
 		return http.StatusInternalServerError, err
 	}
 	return http.StatusOK, nil
+}
+
+func (mysql *MySql) ProjectAccessRequest(ctx context.Context, userId int, projectId string) error {
+	query := "INSERT INTO users_projects (user_id, project_id) VALUES (?, ?)"
+	_, err := mysql.db.ExecContext(ctx, query, userId, projectId)
+	if err != nil {
+		return err
+	}
+	return nil
+
 }

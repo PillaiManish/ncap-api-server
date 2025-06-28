@@ -33,13 +33,6 @@ type JwtClaims struct {
 	//jwt.StandardClaims
 }
 
-type PERMISSION int
-
-const (
-	OWNER PERMISSION = iota
-	ADMIN
-)
-
 type (
 	APIServer interface {
 	}
@@ -97,6 +90,8 @@ func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Conf
 
 	//v2
 	routes.HandleFunc("/edit-project", apiServer.EditProject).Methods(http.MethodPatch)
+	routes.HandleFunc("/check-project-permission", apiServer.CheckProjectPermission).Methods(http.MethodPost)
+	routes.HandleFunc("/project-access-request", apiServer.ProjectAccessRequest).Methods(http.MethodPost)
 
 	//logger.Printf("Server started at port: %v", 8090)
 
@@ -411,7 +406,7 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http
 
 	tableModel.TableName = CreateTableNameFromName(tableModel.DisplayName, projectId)
 
-	hasPermission, err := apiServer.checkPermission(userId, paramsProjectId, OWNER)
+	hasPermission, err := apiServer.checkPermission(userId, paramsProjectId, common.OWNER)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -474,7 +469,7 @@ func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Requ
 
 	projectId := strings.Split(tableModel.TableName, "_")
 
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], OWNER)
+	hasPermission, err := apiServer.checkPermission(userId, projectId[0], common.OWNER)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -534,7 +529,7 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 
 	}
 
-	hasPermission, err := apiServer.checkPermission(userId, retrieveTableListModel.ProjectId, ADMIN)
+	hasPermission, err := apiServer.checkPermission(userId, retrieveTableListModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -588,7 +583,7 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 	}
 
 	projectId := strings.Split(tableModel.TableName, "_")
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], ADMIN)
+	hasPermission, err := apiServer.checkPermission(userId, projectId[0], common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -641,7 +636,7 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 		return
 	}
 
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, ADMIN)
+	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -699,7 +694,7 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 		return
 	}
 
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, ADMIN)
+	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -860,32 +855,69 @@ func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Re
 	apiServer.Response(w, http.StatusOK, nil)
 	return
 }
+func (apiServer *APIServerModel) CheckProjectPermission(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Check Project Permission"
+	apiServer.logger.Debugf("Received %s request", endpointName)
 
-func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission PERMISSION) (bool, error) {
-	switch permission {
-	case OWNER:
-		apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-		res, err := apiServer.database.CheckProjectOwner(apiServer.ctx, userId, projectId)
-		if err != nil {
-			return false, err
-		}
+	tokenString := req.Header.Get("Authorization")
+	userId, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
 
-		if res == http.StatusOK {
-			return true, nil
-		}
+	params := req.URL.Query()
+	projectId := params.Get("projectId")
 
-		return false, nil
-	case ADMIN:
-		apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-		res, err := apiServer.database.CheckProjectUser(apiServer.ctx, userId, projectId)
-		if err != nil {
-			return false, err
-		}
-		if res == http.StatusOK {
-			return true, nil
-		}
+	checkPermission, err := apiServer.checkPermission(userId, projectId, common.ADMIN)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
 
-		return false, nil
+	apiServer.Response(w, http.StatusOK, checkPermission)
+	return
+
+}
+
+func (apiServer *APIServerModel) ProjectAccessRequest(w http.ResponseWriter, req *http.Request) {
+	endpointName := "project access request"
+	apiServer.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := apiServer.Authorization(w, tokenString, endpointName)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	params := req.URL.Query()
+	projectId := params.Get("projectId")
+
+	err = apiServer.database.ProjectAccessRequest(apiServer.ctx, userId, projectId)
+	if err != nil {
+		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	apiServer.Response(w, http.StatusOK, nil)
+	return
+
+}
+
+func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission common.PERMISSION) (bool, error) {
+	apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
+	res, err := apiServer.database.CheckPermission(apiServer.ctx, userId, projectId, permission)
+	if err != nil {
+		return false, err
+	}
+
+	if res == http.StatusOK {
+		return true, nil
 	}
 
 	return false, nil
