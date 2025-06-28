@@ -24,6 +24,8 @@ type Database interface {
 
 	// v2
 	EditProject(ctx context.Context, model *model.ProjectModel) (int, error)
+	CheckProjectOwner(ctx context.Context, userId int, projectId string) (int, error)
+	CheckProjectUser(ctx context.Context, userId int, projectId string) (int, error)
 }
 
 func NewDatabase(config *model.DatabaseConfig) (Database, error) {

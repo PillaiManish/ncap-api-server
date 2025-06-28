@@ -6,12 +6,12 @@ projectConfig:
 database:
   type: MySQL
   connection:
-    uri: avnadmin:AVNS_KqhO5uBIVQsdG8IkbaQ@tcp(ncap-api-server-mysql-ncap-api-server.d.aivencloud.com:21612)/defaultdb
+#    uri: avnadmin:AVNS_KqhO5uBIVQsdG8IkbaQ@tcp(ncap-api-server-mysql-ncap-api-server.d.aivencloud.com:21612)/defaultdb
     host: localhost
     port: 3306
     dbName: ncap
-    user: newuser
-    pass: password
+    user: root
+    pass:
   ssl:
     enabled: true
     caPath: config/mysql-ca-certs.pem

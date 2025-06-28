@@ -26,3 +26,13 @@ CREATE TABLE project_metadata (
     metadata text,
     PRIMARY KEY (id,project_id, display_name)
 );
+
+-- TODO add role
+CREATE TABLE users_projects (
+    user_id int,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+
+    project_id int,
+    FOREIGN KEY (project_id) REFERENCES project_details(id) ON DELETE CASCADE
+
+)

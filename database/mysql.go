@@ -72,10 +72,16 @@ func NewMySQLConnection(config *model.DatabaseConfig) (Database, error) {
 }
 
 func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) (int, error) {
+	tx, err := mysql.db.BeginTx(ctx, nil)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	defer tx.Rollback()
+
 	query := "SELECT COUNT(id) FROM project_details where user_id = ?"
 
 	rowCount := 0
-	row := mysql.db.QueryRowContext(ctx, query, model.UserId)
+	row := tx.QueryRowContext(ctx, query, model.UserId)
 
 	if err := row.Scan(&rowCount); err != nil {
 		return http.StatusInternalServerError, err
@@ -87,50 +93,56 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 
 	query = "INSERT INTO project_details (user_id, name, description) VALUES (?, ?, ?)"
 
-	_, err := mysql.db.ExecContext(ctx, query, model.UserId, model.Name, model.Desc)
+	res, err := tx.ExecContext(ctx, query, model.UserId, model.Name, model.Desc)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-	return http.StatusOK, nil
+
+	lastInsertId, err := res.LastInsertId()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	query = "INSERT INTO users_projects (user_id, project_id) VALUES (?, ?)"
+	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusCreated, nil
 }
-
 func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error) {
-	// Query Generation
-
+	// Base query
 	query := fmt.Sprintf("CREATE TABLE %s", model.TableName)
 
-	// For Columns
-	var columnStmt string
-	i := 0
+	// Start with auto-incrementing ID column
+	columnStmt := "`id` INT AUTO_INCREMENT"
+
+	// Add additional columns
 	for columnName, columnType := range model.Columns {
-		if i == 0 {
-			columnStmt = fmt.Sprintf("`%s` %s", columnName, MapDataType(columnType, common.MYSQL))
-		} else {
-			columnStmt += "," + fmt.Sprintf("`%s` %s", columnName, MapDataType(columnType, common.MYSQL))
-		}
-
-		i += 1
+		columnStmt += fmt.Sprintf(", `%s` %s", columnName, MapDataType(columnType, common.MYSQL))
 	}
 
-	// For Primary Key
+	// Build primary key clause
 	var primaryKeyStmt string
-	for index, primaryKey := range model.PrimaryKeys {
-		if index == 0 {
-			primaryKeyStmt = fmt.Sprintf("`%s`", primaryKey)
-		} else {
-			primaryKeyStmt += ", " + fmt.Sprintf("`%s`", primaryKey)
+	if len(model.PrimaryKeys) == 0 {
+		// No primary key specified, use the default `id`
+		primaryKeyStmt = "`id`"
+	} else {
+		for index, primaryKey := range model.PrimaryKeys {
+			if index > 0 {
+				primaryKeyStmt += ", "
+			}
+			primaryKeyStmt += fmt.Sprintf("`%s`", primaryKey)
 		}
 	}
 
-	if query != "" {
-		// TODO: add a default id, which would be primary key by default
-		if primaryKeyStmt == "" {
-			query = fmt.Sprintf("%s (%s)", query, columnStmt)
-
-		} else {
-			query = fmt.Sprintf("%s (%s, PRIMARY KEY (%s))", query, columnStmt, primaryKeyStmt)
-		}
-	}
+	// Finalize query
+	query = fmt.Sprintf("%s (%s, PRIMARY KEY (%s))", query, columnStmt, primaryKeyStmt)
 
 	_, err := mysql.db.ExecContext(ctx, query)
 	if err != nil {
@@ -417,5 +429,33 @@ func (mysql *MySql) EditProject(ctx context.Context, model *model.ProjectModel) 
 		return http.StatusInternalServerError, err
 	}
 
+	return http.StatusOK, nil
+}
+
+func (mysql *MySql) CheckProjectOwner(ctx context.Context, userId int, projectId string) (int, error) {
+	query := "SELECT id FROM project_details WHERE id = ? and user_id = ?"
+	row := mysql.db.QueryRowContext(ctx, query, projectId, userId)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return http.StatusNotFound, fmt.Errorf("project not found")
+		}
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusOK, nil
+}
+
+func (mysql *MySql) CheckProjectUser(ctx context.Context, userId int, projectId string) (int, error) {
+	query := "SELECT user_id FROM users_projects WHERE user_id = ? and project_id = ?"
+	row := mysql.db.QueryRowContext(ctx, query, userId, projectId)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return http.StatusNotFound, fmt.Errorf("no permission")
+		}
+		return http.StatusInternalServerError, err
+	}
 	return http.StatusOK, nil
 }
