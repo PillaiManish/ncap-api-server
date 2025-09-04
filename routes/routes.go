@@ -47,9 +47,9 @@ func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Conf
 	}()
 
 	routes.initAuthRoutes()
-	routes.initProjectRoutes()
-	routes.initProjectRoutes()
-	routes.initTableDataRoutes()
+routes.initProjectRoutes()
+routes.initTableRoutes()
+routes.initTableDataRoutes()
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "authorization"})
 	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
