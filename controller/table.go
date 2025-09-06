@@ -45,7 +45,7 @@ func (controller *controllerModel) CreateNewTable(w http.ResponseWriter, r *http
 
 	tableModel.TableName = controller.createTableNameFromName(tableModel.DisplayName, projectId)
 
-	hasPermission, httpCode, err := controller.checkPermission(userId, paramsProjectId, common.OWNER)
+	hasPermission, httpCode, err := controller.checkPermission(userId, paramsProjectId, common.OWNER) // TODO: do we have to give permission to ADMIN?
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		controller.Response(w, httpCode, err.Error())

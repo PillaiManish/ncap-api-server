@@ -54,4 +54,11 @@ type (
 		DisplayName string `json:"display_name"`
 		TableRowId  int    `json:"table_row_id"`
 	}
+
+	ProjectAccessRequestModel struct {
+		UserId int    `json:"user_id"` //TODO: replace it with email or name
+		Role   string `json:"role,omitempty"`
+		Status string `json:"status,omitempty"`
+		Action string `json:"action,omitempty"`
+	}
 )

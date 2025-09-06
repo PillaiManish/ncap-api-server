@@ -37,6 +37,9 @@ type (
 		EditProject(w http.ResponseWriter, req *http.Request)
 		CheckProjectPermission(w http.ResponseWriter, req *http.Request)
 		ProjectAccessRequest(w http.ResponseWriter, req *http.Request)
+		ProjectAccessStatus(w http.ResponseWriter, req *http.Request)
+		ProjectAccessRequestList(w http.ResponseWriter, req *http.Request)
+		ProjectAccessRequestAction(w http.ResponseWriter, req *http.Request)
 		RetrieveProjectList(w http.ResponseWriter, req *http.Request)
 
 		InsertIntoTable(w http.ResponseWriter, req *http.Request)
@@ -187,9 +190,9 @@ func (controller *controllerModel) createToken(userId int, name, email string) (
 	return tokenString, nil
 }
 
-func (controller *controllerModel) checkPermission(userId int, projectId string, permission common.PERMISSION) (bool, int, error) {
+func (controller *controllerModel) checkPermission(userId int, projectId string, minRequiredPermission common.PERMISSION) (bool, int, error) {
 	controller.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-	code, err := controller.database.CheckPermission(controller.ctx, userId, projectId, permission)
+	code, err := controller.database.CheckPermission(controller.ctx, userId, projectId, minRequiredPermission)
 	if err != nil {
 		return false, code, err
 	}

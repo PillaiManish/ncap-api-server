@@ -83,7 +83,7 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 	rowCount := 0
 	row := tx.QueryRowContext(ctx, query, model.UserId)
 
-	if err := row.Scan(&rowCount); err != nil {
+	if err = row.Scan(&rowCount); err != nil {
 		return http.StatusInternalServerError, err
 	}
 
@@ -105,11 +105,6 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 
 	query = "INSERT INTO users_projects (user_id, project_id, role, status) VALUES (?, ?, ?, ?)"
 	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId, common.OWNER, common.APPROVED)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	_, err = tx.ExecContext(ctx, query, model.UserId, lastInsertId, common.ADMIN, common.APPROVED)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -437,34 +432,141 @@ func (mysql *MySql) EditProject(ctx context.Context, model *model.ProjectModel) 
 	return http.StatusOK, nil
 }
 
-func (mysql *MySql) CheckPermission(ctx context.Context, userId int, projectId string, role common.PERMISSION) (int, error) {
-	query := "SELECT user_id FROM users_projects WHERE user_id = ? and project_id = ? and status = ? and role = ?"
+func (mysql *MySql) CheckPermission(ctx context.Context, userId int, projectId string, minRole common.PERMISSION) (int, error) {
+	query := "SELECT user_id, role FROM users_projects WHERE user_id = ? and project_id = ? and status = ?"
 
-	row := mysql.db.QueryRowContext(ctx, query, userId, projectId, common.APPROVED, role)
+	row := mysql.db.QueryRowContext(ctx, query, userId, projectId, common.APPROVED)
 	var id int
-	err := row.Scan(&id)
+	var currentRole common.PERMISSION
+
+	err := row.Scan(&id, &currentRole)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return http.StatusNotFound, fmt.Errorf("no permission")
 		}
 		return http.StatusInternalServerError, err
 	}
+
+	if currentRole < minRole {
+		return http.StatusForbidden, fmt.Errorf("insufficient permission")
+	}
+
 	return http.StatusOK, nil
 }
 
-func (mysql *MySql) ProjectAccessRequest(ctx context.Context, userId int, projectId string) error {
+func (mysql *MySql) ProjectAccessRequest(ctx context.Context, userId int, projectId string, role common.PERMISSION) error {
 	// Validate inputs
 	if userId <= 0 || projectId == "" {
 		return fmt.Errorf("invalid user ID or project ID")
 	}
-	query := "INSERT INTO users_projects (user_id, project_id) VALUES (?, ?)"
-	_, err := mysql.db.ExecContext(ctx, query, userId, projectId)
+	query := "INSERT INTO users_projects (user_id, project_id, role) VALUES (?, ?, ?)"
+	_, err := mysql.db.ExecContext(ctx, query, userId, projectId, role)
 	if err != nil {
 		var mysqlErr *mysqlLib.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			//TODO: return proper status code and not internal error
 			return fmt.Errorf("access request already exists")
 		}
 		return err
 	}
 	return nil
+}
+
+func (mysql *MySql) ProjectAccessStatus(ctx context.Context, userId int, projectId string) (common.STATUS, error) {
+	// Validate inputs
+	if userId <= 0 || projectId == "" {
+		return common.PENDING, fmt.Errorf("invalid user ID or project ID")
+	}
+
+	query := "SELECT status FROM users_projects WHERE user_id = ? and project_id = ?"
+	row := mysql.db.QueryRowContext(ctx, query, userId, projectId)
+	var status common.STATUS
+	err := row.Scan(&status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.PENDING, fmt.Errorf("no access request")
+		}
+		return common.PENDING, err
+	}
+	return status, nil
+}
+
+func (mysql *MySql) ProjectAccessList(ctx context.Context, userId int, projectId string) ([]*model.ProjectAccessRequestModel, error) {
+	if userId <= 0 || projectId == "" {
+		return nil, fmt.Errorf("invalid user ID or project ID")
+	}
+
+	query := "SELECT user_id, role, status FROM users_projects WHERE project_id = ?"
+	rows, err := mysql.db.QueryContext(ctx, query, projectId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var projectAccessList []*model.ProjectAccessRequestModel
+
+	for rows.Next() {
+		projectAccess := &model.ProjectAccessRequestModel{}
+		var role common.PERMISSION
+		var status common.STATUS
+
+		// TODO: add something to get name from user id
+		err = rows.Scan(&projectAccess.UserId, &role, &status)
+		if err != nil {
+			return nil, err
+		}
+
+		projectAccess.Status = status.String()
+		projectAccess.Role = role.String()
+
+		if projectAccess.UserId != userId {
+			projectAccessList = append(projectAccessList, projectAccess)
+
+		}
+
+	}
+
+	return projectAccessList, nil
+}
+
+func (mysql *MySql) ProjectAccessAction(ctx context.Context, projectAccessAction *model.ProjectAccessRequestModel, projectId string) error {
+	if projectAccessAction.UserId <= 0 || projectId == "" {
+		return fmt.Errorf("invalid user ID or project ID")
+	}
+
+	var action common.STATUS
+	switch projectAccessAction.Action {
+	case "approve":
+		action = common.APPROVED
+	case "reject":
+		action = common.REJECTED
+	default:
+		return fmt.Errorf("invalid status")
+	}
+
+	query := "UPDATE users_projects SET status = ? WHERE user_id = ? AND project_id = ?"
+	_, err := mysql.db.ExecContext(ctx, query, action, projectAccessAction.UserId, projectId)
+	if err != nil {
+		var mysqlErr *mysqlLib.MySQLError
+		if errors.As(err, &mysqlErr) {
+			return fmt.Errorf("database error: %w", err)
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (mysql *MySql) CheckProjectExists(ctx context.Context, projectId string) (bool, error) {
+	query := "SELECT id FROM project_details WHERE id = ?"
+	row := mysql.db.QueryRowContext(ctx, query, projectId)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

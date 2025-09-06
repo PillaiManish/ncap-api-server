@@ -90,7 +90,7 @@ func (controller *controllerModel) EditProject(w http.ResponseWriter, req *http.
 }
 
 func (controller *controllerModel) CheckProjectPermission(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Check Project Permission"
+	endpointName := "Check Project Role"
 	controller.logger.Debugf("Received %s request", endpointName)
 
 	tokenString := req.Header.Get("Authorization")
@@ -135,7 +135,7 @@ func (controller *controllerModel) ProjectAccessRequest(w http.ResponseWriter, r
 	params := req.URL.Query()
 	projectId := params.Get("projectId")
 
-	err = controller.database.ProjectAccessRequest(controller.ctx, userId, projectId)
+	err = controller.database.ProjectAccessRequest(controller.ctx, userId, projectId, common.ADMIN) //TODO: replace admin with dynamic
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		controller.Response(w, http.StatusInternalServerError, err.Error())
@@ -144,6 +144,137 @@ func (controller *controllerModel) ProjectAccessRequest(w http.ResponseWriter, r
 
 	controller.Response(w, http.StatusOK, nil)
 	return
+}
+
+func (controller *controllerModel) ProjectAccessStatus(w http.ResponseWriter, req *http.Request) {
+	endpointName := "project access request status"
+	controller.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := controller.authorization(w, tokenString, endpointName)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	params := req.URL.Query()
+	projectId := params.Get("projectId")
+
+	projectExists, err := controller.database.CheckProjectExists(controller.ctx, projectId)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if !projectExists {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, "project does not exist")
+
+		controller.Response(w, http.StatusNotFound, "project does not exist")
+		return
+	}
+
+	accessStatus, err := controller.database.ProjectAccessStatus(controller.ctx, userId, projectId)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	controller.Response(w, http.StatusOK, accessStatus.String())
+	return
+}
+
+func (controller *controllerModel) ProjectAccessRequestList(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Project-Access-Request-List"
+	controller.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := controller.authorization(w, tokenString, endpointName)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	params := req.URL.Query()
+	projectId := params.Get("projectId")
+
+	hasPermission, httpCode, err := controller.checkPermission(userId, projectId, common.OWNER)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, httpCode, err.Error())
+		return
+	}
+
+	if !hasPermission {
+		err = fmt.Errorf("user does not have permission to access this project")
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	projectList, err := controller.database.ProjectAccessList(controller.ctx, userId, projectId)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	controller.logger.Debugf("%s: successfully processed", endpointName)
+	controller.Response(w, http.StatusOK, projectList)
+}
+
+func (controller *controllerModel) ProjectAccessRequestAction(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Project-Access-Request-Action"
+	controller.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := controller.authorization(w, tokenString, endpointName)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	params := req.URL.Query()
+	projectId := params.Get("projectId")
+
+	hasPermission, httpCode, err := controller.checkPermission(userId, projectId, common.OWNER)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, httpCode, err.Error())
+		return
+	}
+
+	if !hasPermission {
+		err = fmt.Errorf("user does not have permission to access this project")
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var projectAccessAction *model.ProjectAccessRequestModel
+
+	if err := dec.Decode(&projectAccessAction); err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err = controller.database.ProjectAccessAction(controller.ctx, projectAccessAction, projectId)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	controller.logger.Debugf("%s: successfully processed", endpointName)
+	controller.Response(w, http.StatusOK, nil)
 }
 
 func (controller *controllerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {

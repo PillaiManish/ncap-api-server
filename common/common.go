@@ -11,8 +11,8 @@ const (
 type PERMISSION int
 
 const (
-	OWNER PERMISSION = iota
-	ADMIN
+	ADMIN PERMISSION = 8
+	OWNER            = 10
 )
 
 type STATUS int
@@ -22,3 +22,27 @@ const (
 	APPROVED
 	REJECTED
 )
+
+func (p PERMISSION) String() string {
+	switch p {
+	case OWNER:
+		return "OWNER"
+	case ADMIN:
+		return "ADMIN"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func (s STATUS) String() string {
+	switch s {
+	case PENDING:
+		return "PENDING"
+	case APPROVED:
+		return "APPROVED"
+	case REJECTED:
+		return "REJECTED"
+	default:
+		return "UNKNOWN"
+	}
+}
