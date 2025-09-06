@@ -5,21 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
-	"io"
 	"ncap-api-server/common"
 	"ncap-api-server/database"
 	"ncap-api-server/model"
 	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 )
 
@@ -33,15 +24,26 @@ type JwtClaims struct {
 	//jwt.StandardClaims
 }
 
-type PERMISSION int
-
-const (
-	OWNER PERMISSION = iota
-	ADMIN
-)
-
 type (
 	APIServer interface {
+		Login(w http.ResponseWriter, r *http.Request)
+		Register(w http.ResponseWriter, r *http.Request)
+
+		CreateNewTable(w http.ResponseWriter, req *http.Request)
+		DropTable(w http.ResponseWriter, req *http.Request)
+		RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request)
+
+		CreateNewProject(w http.ResponseWriter, req *http.Request)
+		EditProject(w http.ResponseWriter, req *http.Request)
+		CheckProjectPermission(w http.ResponseWriter, req *http.Request)
+		ProjectAccessRequest(w http.ResponseWriter, req *http.Request)
+		RetrieveProjectList(w http.ResponseWriter, req *http.Request)
+
+		InsertIntoTable(w http.ResponseWriter, req *http.Request)
+		RetrieveDataTable(w http.ResponseWriter, req *http.Request)
+		DeleteEntryFromTable(w http.ResponseWriter, req *http.Request)
+
+		Stop()
 	}
 
 	APIServerModel struct {
@@ -52,112 +54,13 @@ type (
 	}
 )
 
-//var secretKey = []byte("secret-key")
-
-func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Config) error {
-	apiServer := &APIServerModel{logger: logger, config: config, ctx: ctx}
-
-	routes := mux.NewRouter()
-
-	newDB, err := database.NewDatabase(config.Database)
-	if err != nil {
-		logger.Fatalf("could not connect to database due to err: %s", err.Error())
+func NewApiServerModel(ctx context.Context, logger *logrus.Logger, database database.Database, config *model.Config) APIServer {
+	return &APIServerModel{
+		logger:   logger,
+		database: database,
+		config:   config,
+		ctx:      ctx,
 	}
-
-	if newDB == nil {
-		logger.Fatalf("database connection return empty database")
-	}
-	apiServer.database = newDB
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			logger.Debugf("closing database connection")
-			apiServer.database.Close()
-			return
-
-		}
-	}()
-
-	// Authentication
-	routes.HandleFunc("/login", apiServer.LoginUser).Methods(http.MethodPost)
-	routes.HandleFunc("/register", apiServer.RegisterUser).Methods(http.MethodPost)
-
-	routes.HandleFunc("/create-new-project", apiServer.CreateNewProject).Methods(http.MethodPost)
-	routes.HandleFunc("/create-table", apiServer.CreateNewTable).Methods(http.MethodPost)
-	routes.HandleFunc("/drop-table", apiServer.DropTable).Methods(http.MethodPost)
-	routes.HandleFunc("/insert-into-table", apiServer.InsertIntoTable).Methods(http.MethodPost)
-	//routes.HandleFunc("/delete-table", apiServer.DropTable).Methods(http.MethodPost)
-	routes.HandleFunc("/retrieve-table-list", apiServer.RetrieveTableListFromMetaData).Methods(http.MethodPost)
-	routes.HandleFunc("/retrieve-data-from-table", apiServer.RetrieveDataTable).Methods(http.MethodPost)
-	routes.HandleFunc("/delete-from-table", apiServer.DeleteEntryFromTable).Methods(http.MethodPost)
-
-	// TODO: list of projects
-	routes.HandleFunc("/retrieve-project-list", apiServer.RetrieveProjectList).Methods(http.MethodGet)
-
-	//v2
-	routes.HandleFunc("/edit-project", apiServer.EditProject).Methods(http.MethodPatch)
-
-	//logger.Printf("Server started at port: %v", 8090)
-
-	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
-
-	allowedOrigins := []string{config.AdminPanelUrl}
-
-	if os.Getenv(common.ADMIN_PANEL_URL) != "" {
-		allowedOrigins = append(allowedOrigins, os.Getenv(common.ADMIN_PANEL_URL))
-	}
-
-	origins := handlers.AllowedOrigins(allowedOrigins)
-	logger.Infof("ncap-api-server starting at port: %v", 8080)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		err = http.ListenAndServe(":8080", handlers.CORS(headers, methods, origins)(routes))
-		//err = http.ListenAndServe(":8080", routes)
-		if err != nil {
-			logger.Fatalf("ncap-api-server failed to start due to err: %s", err.Error())
-		}
-	}()
-
-	exitChan := SystemSignalHandling
-	code := <-exitChan()
-
-	logger.Debugf("Received signal to stop: %v", code)
-	apiServer.Stop()
-
-	wg.Wait()
-
-	return nil
-}
-
-func SystemSignalHandling() chan int {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
-
-	exitChan := make(chan int, 1)
-
-	select {
-	case s := <-signalChan:
-		switch s {
-		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-			exitChan <- 0
-		default:
-			println("unknown signal")
-			exitChan <- 1
-		}
-	}
-	return exitChan
-}
-
-func (apiServer *APIServerModel) Stop() {
-	apiServer.database.Close()
-	apiServer.logger.Debugf("db closed and closed api-server")
-	apiServer.logger.Exit(1)
 }
 
 func (apiServer *APIServerModel) Response(w http.ResponseWriter, code int, payload interface{}) {
@@ -230,505 +133,11 @@ func (apiServer *APIServerModel) Response(w http.ResponseWriter, code int, paylo
 	json.NewEncoder(w).Encode(resultStatus)
 	return
 }
-func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Create New Project"
-	apiServer.logger.Debugf("Received %s request", endpointName)
 
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	project := &model.ProjectModel{}
-	err = json.Unmarshal(body, project)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	project.UserId = userId
-
-	statusCode, err := apiServer.database.CreateNewProject(apiServer.ctx, project, apiServer.config.ProjectConfig.Limit)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, statusCode, nil)
-	return
-
-}
-
-func (apiServer *APIServerModel) RegisterUser(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Register"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
-
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	newUser := &model.UserModel{}
-	err = json.Unmarshal(body, newUser)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if newUser.Name == "" || newUser.Password == "" || newUser.Email == "" {
-		err := fmt.Errorf("name/password/email cannot be empty")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 1)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	newUser.Password = string(encryptPasswd)
-
-	userId, statusCode, err := apiServer.database.RegisterUser(apiServer.ctx, newUser)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	newUser.Id = int(userId)
-
-	token, err := apiServer.createToken(newUser)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusCreated, token)
-	return
-}
-
-func (apiServer *APIServerModel) LoginUser(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Login"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(req.Body)
-
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	checkUser := &model.UserModel{}
-	err = json.Unmarshal(body, checkUser)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if checkUser.Password == "" || checkUser.Email == "" {
-		err := fmt.Errorf("email/password cannot be empty")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	userModel, statusCode, err := apiServer.database.LoginUser(apiServer.ctx, checkUser)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	token, err := apiServer.createToken(userModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, token)
-	return
-}
-
-func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Create-New-Table"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	params := req.URL.Query()
-	paramsProjectId := params.Get("project_id")
-
-	projectId, err := strconv.Atoi(paramsProjectId)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	tableModel := &model.CreateTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	tableModel.TableName = CreateTableNameFromName(tableModel.DisplayName, projectId)
-
-	hasPermission, err := apiServer.checkPermission(userId, paramsProjectId, OWNER)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	statusCode, err := apiServer.database.CreateTable(apiServer.ctx, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	statusCode, err = apiServer.database.InsertIntoMetaData(apiServer.ctx, tableModel, projectId)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusCreated, nil)
-
-	return
-}
-
-func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Drop Table"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	tableModel := &model.DropTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	projectId := strings.Split(tableModel.TableName, "_")
-
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], OWNER)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	err = apiServer.database.DropTable(apiServer.ctx, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, nil)
-	return
-}
-
-func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Retrieve Table List"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	retrieveTableListModel := &model.RetrieveTableListModel{}
-	err = json.Unmarshal(body, retrieveTableListModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if retrieveTableListModel.ProjectId == "" {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-
-	}
-
-	hasPermission, err := apiServer.checkPermission(userId, retrieveTableListModel.ProjectId, ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	tableList, statusCode, err := apiServer.database.RetrieveTableListFromMetaData(apiServer.ctx, retrieveTableListModel.ProjectId)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, tableList)
-	return
-}
-
-func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Insert Into Table"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	tableModel := &model.InsertIntoTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	projectId := strings.Split(tableModel.TableName, "_")
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	err = apiServer.database.InsertIntoTable(apiServer.ctx, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, nil)
-	return
-}
-
-func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Retrieve Data Table List"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	tableModel := &model.RetrieveDataFromTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	columns, data, err := apiServer.database.RetrieveDataFromTable(apiServer.ctx, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	resultData := map[string]interface{}{
-		"columns": columns,
-		"rows":    data,
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, resultData)
-	return
-}
-
-func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req *http.Request) {
-	endpointName := " Delete Entry"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	tableModel := &model.DeleteEntryFromTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if !hasPermission {
-		err = fmt.Errorf("user does not have permission to access this project")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	err = apiServer.database.DeleteEntryFromTable(apiServer.ctx, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, nil)
-	return
-}
-
-func (apiServer *APIServerModel) Authorization(w http.ResponseWriter, authorizationHeader, endpointName string) (int, error) {
+func (apiServer *APIServerModel) authorization(w http.ResponseWriter, authorizationHeader, endpointName string) (int, error) {
 
 	if authorizationHeader == "" {
-		err := fmt.Errorf("missing Authorization header")
+		err := fmt.Errorf("missing authorization header")
 		return -1, err
 	}
 
@@ -741,37 +150,30 @@ func (apiServer *APIServerModel) Authorization(w http.ResponseWriter, authorizat
 
 	return userId, nil
 }
-func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Retrieve Project List"
-	apiServer.logger.Debugf("Received %s request", endpointName)
 
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
+func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok || token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return apiServer.config.JWT.Secret, nil
+	})
 	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
+		return -1, err
 	}
-
-	projects, statusCode, err := apiServer.database.RetrieveProjectList(apiServer.ctx, userId)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-
+	claims, ok := token.Claims.(*JwtClaims)
+	if !ok || !token.Valid {
+		return -1, fmt.Errorf("invalid token")
 	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, projects)
-	return
+	return claims.UserID, nil
 }
 
-func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string, error) {
+func (apiServer *APIServerModel) createToken(userId int, name, email string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			"id":    userModel.Id,
-			"name":  userModel.Name,
-			"email": userModel.Email,
+			"id":    userId,
+			"name":  name,
+			"email": email,
 			"exp":   time.Now().Add(time.Hour * 24).Unix(),
 		})
 
@@ -783,110 +185,26 @@ func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string
 	return tokenString, nil
 }
 
-func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return apiServer.config.JWT.Secret, nil
-	})
-
+func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission common.PERMISSION) (bool, int, error) {
+	apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
+	code, err := apiServer.database.CheckPermission(apiServer.ctx, userId, projectId, permission)
 	if err != nil {
-		return -1, err
+		return false, code, err
 	}
-
-	if !token.Valid {
-		return -1, fmt.Errorf("invalid token")
-	}
-	userId := -1
-	if claims, ok := token.Claims.(*JwtClaims); ok && token.Valid {
-		userId = claims.UserID
-		return userId, nil
-
-	} else {
-		return -1, fmt.Errorf("invalid token")
-	}
+	return code == http.StatusOK, code, nil
 }
 
-func CreateTableNameFromName(displayName string, projectId int) string {
+func (apiServer *APIServerModel) createTableNameFromName(displayName string, projectId int) string {
 	tableName := strings.ReplaceAll(displayName, "-", "_")
 	tableName = strings.ReplaceAll(tableName, " ", "_")
 
 	return fmt.Sprintf("%v_%s", projectId, tableName)
 }
 
-// v2
-func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Request) {
-	endpointName := "Edit Project"
-	apiServer.logger.Debugf("Received %s request", endpointName)
-
-	tokenString := req.Header.Get("Authorization")
-	userId, err := apiServer.Authorization(w, tokenString, endpointName)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
-		return
+func (apiServer *APIServerModel) Stop() {
+	if err := apiServer.database.Close(); err != nil {
+		apiServer.logger.Errorf("db close error: %v", err)
+	} else {
+		apiServer.logger.Debugf("db closed; stopping api-server")
 	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-	}
-
-	projectModel := &model.ProjectModel{}
-	err = json.Unmarshal(body, projectModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if projectModel.Id == "" || projectModel.Name == "" || projectModel.Desc == "" {
-		err = fmt.Errorf("bad request")
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	projectModel.UserId = userId
-
-	statusCode, err := apiServer.database.EditProject(apiServer.ctx, projectModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, statusCode, err.Error())
-		return
-
-	}
-
-	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, nil)
-	return
-}
-
-func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission PERMISSION) (bool, error) {
-	switch permission {
-	case OWNER:
-		apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-		res, err := apiServer.database.CheckProjectOwner(apiServer.ctx, userId, projectId)
-		if err != nil {
-			return false, err
-		}
-
-		if res == http.StatusOK {
-			return true, nil
-		}
-
-		return false, nil
-	case ADMIN:
-		apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-		res, err := apiServer.database.CheckProjectUser(apiServer.ctx, userId, projectId)
-		if err != nil {
-			return false, err
-		}
-		if res == http.StatusOK {
-			return true, nil
-		}
-
-		return false, nil
-	}
-
-	return false, nil
 }

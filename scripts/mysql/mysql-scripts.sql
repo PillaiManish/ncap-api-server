@@ -35,4 +35,9 @@ CREATE TABLE users_projects (
     project_id int,
     FOREIGN KEY (project_id) REFERENCES project_details(id) ON DELETE CASCADE
 
+    role int default 1,
+    status int default 0,
+
+    PRIMARY KEY (user_id, project_id)
+
 )
