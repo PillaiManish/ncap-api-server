@@ -161,3 +161,55 @@ func (controller *controllerModel) DeleteEntryFromTable(w http.ResponseWriter, r
 	controller.Response(w, http.StatusOK, nil)
 	return
 }
+
+func (controller *controllerModel) UpdateTableData(w http.ResponseWriter, req *http.Request) {
+	endpointName := "Update Table Data"
+	controller.logger.Debugf("Received %s request", endpointName)
+
+	tokenString := req.Header.Get("Authorization")
+	userId, err := controller.authorization(w, tokenString, endpointName)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.UpdateTableDataModel
+
+	if err := dec.Decode(&tableModel); err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	projectId := strings.Split(tableModel.TableName, "_")
+	hasPermission, httpCode, err := controller.checkPermission(userId, projectId[0], common.ADMIN)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, httpCode, err.Error())
+		return
+	}
+
+	if !hasPermission {
+		err = fmt.Errorf("user does not have permission to access this project")
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	// TODO: add validation
+
+	err = controller.database.UpdateTableData(controller.ctx, tableModel)
+	if err != nil {
+		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
+		controller.Response(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	controller.logger.Debugf("%s: successfully processed", endpointName)
+	controller.Response(w, http.StatusOK, nil)
+	return
+}

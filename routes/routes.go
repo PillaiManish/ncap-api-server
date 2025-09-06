@@ -102,7 +102,7 @@ func (s *Server) getCORSHeaders() handlers.CORSOption {
 // getCORSMethods returns the allowed CORS methods
 func (s *Server) getCORSMethods() handlers.CORSOption {
 	return handlers.AllowedMethods([]string{
-		"GET", "POST", "PUT", "DELETE", "OPTIONS",
+		"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH",
 	})
 }
 

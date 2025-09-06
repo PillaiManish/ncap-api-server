@@ -15,6 +15,7 @@ import (
 	"ncap-api-server/model"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type MySql struct {
@@ -183,6 +184,28 @@ func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertInto
 		return err
 	}
 
+	return nil
+}
+
+func (mysql *MySql) UpdateTableData(ctx context.Context, model *model.UpdateTableDataModel) error {
+	query := fmt.Sprintf("UPDATE %s SET ", model.TableName)
+
+	var values []interface{}
+	var setStatements []string
+
+	for columnName, columnValue := range model.Columns {
+		setStatements = append(setStatements, fmt.Sprintf("%s = ?", columnName))
+		values = append(values, columnValue)
+	}
+
+	query += strings.Join(setStatements, ", ")
+	query += " WHERE id = ?"
+	values = append(values, model.Id)
+
+	_, err := mysql.db.ExecContext(ctx, query, values...)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

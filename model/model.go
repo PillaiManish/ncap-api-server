@@ -36,6 +36,12 @@ type (
 		Columns   map[string]string `json:"columns"`
 	}
 
+	UpdateTableDataModel struct {
+		TableName string            `json:"table_name"`
+		Columns   map[string]string `json:"columns"`
+		Id        int               `json:"id"`
+	}
+
 	DropTableModel struct {
 		TableName string `json:"table_name"`
 	}

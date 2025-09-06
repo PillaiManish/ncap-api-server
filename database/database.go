@@ -14,6 +14,7 @@ type Database interface {
 	CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) (int, error)
 	CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error)
 	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
+	UpdateTableData(ctx context.Context, model *model.UpdateTableDataModel) error
 	DropTable(ctx context.Context, model *model.DropTableModel) error
 	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) (int, error)
 	RetrieveTableListFromMetaData(ctx context.Context, projectId string) ([]*model.CreateTableModel, int, error)
