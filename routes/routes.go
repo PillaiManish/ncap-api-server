@@ -79,26 +79,23 @@ func (s *Server) setupRoutes() {
 
 // setupCORS configures CORS middleware
 func (s *Server) setupCORS() {
-	s.router.Use(s.corsMiddleware())
-}
-
-// corsMiddleware creates a CORS middleware function
-func (s *Server) corsMiddleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return handlers.CORS(
-			s.getCORSHeaders(),
-			s.getCORSMethods(),
-			s.getCORSOrigins(),
-		)(next)
-	}
+	// CORS is now applied at the server level in createHTTPServer()
+	// This function is kept for future CORS-related setup if needed
+	s.logger.Debug("CORS configuration will be applied at server level")
 }
 
 // getCORSHeaders returns the allowed CORS headers
 func (s *Server) getCORSHeaders() handlers.CORSOption {
 	return handlers.AllowedHeaders([]string{
-		"X-Requested-With",
+		"Accept",
+		"Accept-Language",
+		"Content-Language",
 		"Content-Type",
 		"Authorization",
+		"X-Requested-With",
+		"Origin",
+		"Access-Control-Request-Method",
+		"Access-Control-Request-Headers",
 	})
 }
 
@@ -122,9 +119,16 @@ func (s *Server) getCORSOrigins() handlers.CORSOption {
 
 // createHTTPServer creates the HTTP server instance
 func (s *Server) createHTTPServer() {
+	// Apply CORS at the server level
+	corsHandler := handlers.CORS(
+		s.getCORSHeaders(),
+		s.getCORSMethods(),
+		s.getCORSOrigins(),
+	)(s.router)
+
 	s.server = &http.Server{
 		Addr:         serverPort,
-		Handler:      s.router,
+		Handler:      corsHandler,
 		WriteTimeout: writeTimeout,
 		ReadTimeout:  readTimeout,
 		IdleTimeout:  idleTimeout,

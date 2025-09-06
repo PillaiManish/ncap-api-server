@@ -25,7 +25,11 @@ type Database interface {
 	// v2
 	EditProject(ctx context.Context, model *model.ProjectModel) (int, error)
 	CheckPermission(ctx context.Context, userId int, projectId string, role common.PERMISSION) (int, error)
-	ProjectAccessRequest(ctx context.Context, userId int, projectId string) error
+	ProjectAccessRequest(ctx context.Context, userId int, projectId string, role common.PERMISSION) error
+	ProjectAccessStatus(ctx context.Context, userId int, projectId string) (common.STATUS, error)
+	ProjectAccessList(ctx context.Context, userId int, projectId string) ([]*model.ProjectAccessRequestModel, error)
+	ProjectAccessAction(ctx context.Context, projectAccessAction *model.ProjectAccessRequestModel, projectId string) error
+	CheckProjectExists(ctx context.Context, projectId string) (bool, error)
 }
 
 func NewDatabase(config *model.DatabaseConfig) (Database, error) {
