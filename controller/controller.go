@@ -153,32 +153,27 @@ func (apiServer *APIServerModel) authorization(w http.ResponseWriter, authorizat
 
 func (apiServer *APIServerModel) verifyToken(tokenString string) (int, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok || token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return apiServer.config.JWT.Secret, nil
 	})
-
 	if err != nil {
 		return -1, err
 	}
-
-	if !token.Valid {
+	claims, ok := token.Claims.(*JwtClaims)
+	if !ok || !token.Valid {
 		return -1, fmt.Errorf("invalid token")
 	}
-	userId := -1
-	if claims, ok := token.Claims.(*JwtClaims); ok && token.Valid {
-		userId = claims.UserID
-		return userId, nil
-
-	} else {
-		return -1, fmt.Errorf("invalid token")
-	}
+	return claims.UserID, nil
 }
 
-func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string, error) {
+func (apiServer *APIServerModel) createToken(userId int, name, email string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
-			"id":    userModel.Id,
-			"name":  userModel.Name,
-			"email": userModel.Email,
+			"id":    userId,
+			"name":  name,
+			"email": email,
 			"exp":   time.Now().Add(time.Hour * 24).Unix(),
 		})
 
@@ -190,18 +185,13 @@ func (apiServer *APIServerModel) createToken(userModel *model.UserModel) (string
 	return tokenString, nil
 }
 
-func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission common.PERMISSION) (bool, error) {
+func (apiServer *APIServerModel) checkPermission(userId int, projectId string, permission common.PERMISSION) (bool, int, error) {
 	apiServer.logger.Debugf("Checking if user %d has permission to project %s", userId, projectId)
-	res, err := apiServer.database.CheckPermission(apiServer.ctx, userId, projectId, permission)
+	code, err := apiServer.database.CheckPermission(apiServer.ctx, userId, projectId, permission)
 	if err != nil {
-		return false, err
+		return false, code, err
 	}
-
-	if res == http.StatusOK {
-		return true, nil
-	}
-
-	return false, nil
+	return code == http.StatusOK, code, nil
 }
 
 func (apiServer *APIServerModel) createTableNameFromName(displayName string, projectId int) string {
@@ -212,7 +202,9 @@ func (apiServer *APIServerModel) createTableNameFromName(displayName string, pro
 }
 
 func (apiServer *APIServerModel) Stop() {
-	apiServer.database.Close()
-	apiServer.logger.Debugf("db closed and closed api-server")
-	apiServer.logger.Exit(1)
+	if err := apiServer.database.Close(); err != nil {
+		apiServer.logger.Errorf("db close error: %v", err)
+	} else {
+		apiServer.logger.Debugf("db closed; stopping api-server")
+	}
 }

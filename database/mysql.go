@@ -453,11 +453,18 @@ func (mysql *MySql) CheckPermission(ctx context.Context, userId int, projectId s
 }
 
 func (mysql *MySql) ProjectAccessRequest(ctx context.Context, userId int, projectId string) error {
+	// Validate inputs
+	if userId <= 0 || projectId == "" {
+		return fmt.Errorf("invalid user ID or project ID")
+	}
 	query := "INSERT INTO users_projects (user_id, project_id) VALUES (?, ?)"
 	_, err := mysql.db.ExecContext(ctx, query, userId, projectId)
 	if err != nil {
+		var mysqlErr *mysqlLib.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return fmt.Errorf("access request already exists")
+		}
 		return err
 	}
 	return nil
-
 }

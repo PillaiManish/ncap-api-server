@@ -3,7 +3,6 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"ncap-api-server/common"
 	"ncap-api-server/model"
 	"net/http"
@@ -23,10 +22,14 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.CreateTableModel
+
+	if err := dec.Decode(&tableModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -40,20 +43,12 @@ func (apiServer *APIServerModel) CreateNewTable(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	tableModel := &model.CreateTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	tableModel.TableName = apiServer.createTableNameFromName(tableModel.DisplayName, projectId)
 
-	hasPermission, err := apiServer.checkPermission(userId, paramsProjectId, common.OWNER)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, paramsProjectId, common.OWNER)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 
@@ -96,27 +91,23 @@ func (apiServer *APIServerModel) DropTable(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.DropTableModel
 
-	tableModel := &model.DropTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
+	if err := dec.Decode(&tableModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	projectId := strings.Split(tableModel.TableName, "_")
 
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], common.OWNER)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, projectId[0], common.OWNER)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 
@@ -151,32 +142,28 @@ func (apiServer *APIServerModel) RetrieveTableListFromMetaData(w http.ResponseWr
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var retrieveTableListModel *model.RetrieveTableListModel
 
-	retrieveTableListModel := &model.RetrieveTableListModel{}
-	err = json.Unmarshal(body, retrieveTableListModel)
-	if err != nil {
+	if err := dec.Decode(&retrieveTableListModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if retrieveTableListModel.ProjectId == "" {
+		err := fmt.Errorf("project ID cannot be empty")
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
-
 	}
 
-	hasPermission, err := apiServer.checkPermission(userId, retrieveTableListModel.ProjectId, common.ADMIN)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, retrieveTableListModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 

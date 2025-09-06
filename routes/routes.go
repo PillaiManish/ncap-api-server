@@ -48,7 +48,7 @@ func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Conf
 
 	routes.initAuthRoutes()
 	routes.initProjectRoutes()
-	routes.initProjectRoutes()
+	routes.initTableRoutes()
 	routes.initTableDataRoutes()
 
 	headers := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "authorization"})
@@ -74,22 +74,20 @@ func NewApiServer(ctx context.Context, logger *logrus.Logger, config *model.Conf
 		}
 	}()
 
-	exitChan := SystemSignalHandling
-	code := <-exitChan()
+	exitChan := SystemSignalHandling()
+	code := <-exitChan
 
 	logger.Debugf("Received signal to stop: %v", code)
-
+	wg.Wait()
 	return nil
 }
 
 func SystemSignalHandling() chan int {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
-
 	exitChan := make(chan int, 1)
-
-	select {
-	case s := <-signalChan:
+	go func() {
+		s := <-signalChan
 		switch s {
 		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			exitChan <- 0
@@ -97,6 +95,6 @@ func SystemSignalHandling() chan int {
 			println("unknown signal")
 			exitChan <- 1
 		}
-	}
+	}()
 	return exitChan
 }

@@ -3,7 +3,6 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"ncap-api-server/common"
 	"ncap-api-server/model"
 	"net/http"
@@ -22,26 +21,22 @@ func (apiServer *APIServerModel) InsertIntoTable(w http.ResponseWriter, req *htt
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.InsertIntoTableModel
 
-	tableModel := &model.InsertIntoTableModel{}
-	err = json.Unmarshal(body, tableModel)
-	if err != nil {
+	if err := dec.Decode(&tableModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	projectId := strings.Split(tableModel.TableName, "_")
-	hasPermission, err := apiServer.checkPermission(userId, projectId[0], common.ADMIN)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, projectId[0], common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 
@@ -76,25 +71,21 @@ func (apiServer *APIServerModel) RetrieveDataTable(w http.ResponseWriter, req *h
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.RetrieveDataFromTableModel
+
+	if err := dec.Decode(&tableModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	tableModel := &model.RetrieveDataFromTableModel{}
-	err = json.Unmarshal(body, tableModel)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 
@@ -134,25 +125,21 @@ func (apiServer *APIServerModel) DeleteEntryFromTable(w http.ResponseWriter, req
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var tableModel *model.DeleteEntryFromTableModel
+
+	if err := dec.Decode(&tableModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	tableModel := &model.DeleteEntryFromTableModel{}
-	err = json.Unmarshal(body, tableModel)
+	hasPermission, httpCode, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	hasPermission, err := apiServer.checkPermission(userId, tableModel.ProjectId, common.ADMIN)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusInternalServerError, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 

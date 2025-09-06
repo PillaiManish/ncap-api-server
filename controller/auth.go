@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
-	"io"
 	"ncap-api-server/model"
 	"net/http"
 )
@@ -12,17 +11,13 @@ import (
 func (apiServer *APIServerModel) Login(w http.ResponseWriter, r *http.Request) {
 	endpointName := "Login"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(r.Body)
 
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var checkUser *model.UserModel
 
-	checkUser := &model.UserModel{}
-	err = json.Unmarshal(body, checkUser)
-	if err != nil {
+	if err := dec.Decode(&checkUser); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
@@ -42,7 +37,7 @@ func (apiServer *APIServerModel) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := apiServer.createToken(userModel)
+	token, err := apiServer.createToken(userModel.Id, userModel.Name, userModel.Email)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -57,17 +52,12 @@ func (apiServer *APIServerModel) Login(w http.ResponseWriter, r *http.Request) {
 func (apiServer *APIServerModel) Register(w http.ResponseWriter, r *http.Request) {
 	endpointName := "Register"
 	apiServer.logger.Debugf("Received %s request", endpointName)
-	body, err := io.ReadAll(r.Body)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var newUser *model.UserModel
 
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	newUser := &model.UserModel{}
-	err = json.Unmarshal(body, newUser)
-	if err != nil {
+	if err := dec.Decode(&newUser); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
@@ -80,7 +70,7 @@ func (apiServer *APIServerModel) Register(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), 1)
+	encryptPasswd, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())
@@ -98,7 +88,7 @@ func (apiServer *APIServerModel) Register(w http.ResponseWriter, r *http.Request
 
 	newUser.Id = int(userId)
 
-	token, err := apiServer.createToken(newUser)
+	token, err := apiServer.createToken(newUser.Id, newUser.Name, newUser.Email)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusInternalServerError, err.Error())

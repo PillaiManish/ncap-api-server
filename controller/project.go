@@ -3,7 +3,6 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"ncap-api-server/common"
 	"ncap-api-server/model"
 	"net/http"
@@ -21,16 +20,12 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var project *model.ProjectModel
 
-	project := &model.ProjectModel{}
-	err = json.Unmarshal(body, project)
-	if err != nil {
+	if err := dec.Decode(&project); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
@@ -48,7 +43,6 @@ func (apiServer *APIServerModel) CreateNewProject(w http.ResponseWriter, req *ht
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
 	apiServer.Response(w, statusCode, nil)
 	return
-
 }
 
 func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Request) {
@@ -63,15 +57,12 @@ func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusBadRequest, err.Error())
-	}
+	req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var projectModel *model.ProjectModel
 
-	projectModel := &model.ProjectModel{}
-	err = json.Unmarshal(body, projectModel)
-	if err != nil {
+	if err := dec.Decode(&projectModel); err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, http.StatusBadRequest, err.Error())
 		return
@@ -91,11 +82,10 @@ func (apiServer *APIServerModel) EditProject(w http.ResponseWriter, req *http.Re
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, statusCode, err.Error())
 		return
-
 	}
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
-	apiServer.Response(w, http.StatusOK, nil)
+	apiServer.Response(w, statusCode, nil)
 	return
 }
 
@@ -114,16 +104,20 @@ func (apiServer *APIServerModel) CheckProjectPermission(w http.ResponseWriter, r
 	params := req.URL.Query()
 	projectId := params.Get("projectId")
 
-	checkPermission, err := apiServer.checkPermission(userId, projectId, common.ADMIN)
+	if projectId == "" {
+		apiServer.Response(w, http.StatusBadRequest, "missing projectId")
+		return
+	}
+
+	checkPermission, httpCode, err := apiServer.checkPermission(userId, projectId, common.ADMIN)
 	if err != nil {
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		apiServer.Response(w, http.StatusUnauthorized, err.Error())
+		apiServer.Response(w, httpCode, err.Error())
 		return
 	}
 
 	apiServer.Response(w, http.StatusOK, checkPermission)
 	return
-
 }
 
 func (apiServer *APIServerModel) ProjectAccessRequest(w http.ResponseWriter, req *http.Request) {
@@ -150,7 +144,6 @@ func (apiServer *APIServerModel) ProjectAccessRequest(w http.ResponseWriter, req
 
 	apiServer.Response(w, http.StatusOK, nil)
 	return
-
 }
 
 func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req *http.Request) {
@@ -170,7 +163,6 @@ func (apiServer *APIServerModel) RetrieveProjectList(w http.ResponseWriter, req 
 		apiServer.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		apiServer.Response(w, statusCode, err.Error())
 		return
-
 	}
 
 	apiServer.logger.Debugf("%s: successfully processed", endpointName)
