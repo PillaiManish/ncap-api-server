@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
-	"ncap-api-server/controller"
 	"ncap-api-server/model"
+	"ncap-api-server/routes"
 	"os"
 )
 
@@ -31,7 +31,7 @@ func main() {
 	}
 	logger.SetLevel(logLevel)
 
-	err = controller.NewApiServer(ctx, logger, config)
+	err = routes.NewApiServer(ctx, logger, config)
 	if err != nil {
 		logger.Fatal(err)
 	}
