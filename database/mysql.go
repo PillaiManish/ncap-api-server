@@ -176,6 +176,11 @@ func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertInto
 
 	i := 0
 	for columnName, columnValue := range model.Columns {
+
+		// TODO: not a good way, find other way to handle it
+		if columnName == "id" {
+			continue
+		}
 		if i == 0 {
 			columnStmt = fmt.Sprintf("%s", columnName)
 			columnValueStmt = fmt.Sprintf(`"%s"`, columnValue)
@@ -191,6 +196,7 @@ func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertInto
 	query += fmt.Sprintf(" (%s)", columnStmt)
 	query += fmt.Sprintf(" VALUES (%s)", columnValueStmt)
 
+	fmt.Println(query)
 	_, err := mysql.db.ExecContext(ctx, query)
 	if err != nil {
 		return err
