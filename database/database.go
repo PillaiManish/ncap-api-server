@@ -12,13 +12,13 @@ type Database interface {
 	LoginUser(ctx context.Context, model *model.UserModel) (*model.UserModel, int, error)
 
 	CreateNewProject(ctx context.Context, model *model.ProjectModel, projectLimit int) (int, error)
-	CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error)
+	CreateTable(ctx context.Context, projectId int, model *model.CreateTableModel) (int, error)
 	InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error
 	UpdateTableData(ctx context.Context, model *model.UpdateTableDataModel) error
 	DropTable(ctx context.Context, model *model.DropTableModel) error
 	InsertIntoMetaData(ctx context.Context, model *model.CreateTableModel, projectId int) (int, error)
 	RetrieveTableListFromMetaData(ctx context.Context, projectId string) ([]*model.CreateTableModel, int, error)
-	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error)
+	RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, []string, []*model.ForeignKey, error)
 	DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error
 	RetrieveProjectList(ctx context.Context, userId int) ([]*model.ProjectModel, int, error)
 	Close() error

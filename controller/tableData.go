@@ -96,7 +96,7 @@ func (controller *controllerModel) RetrieveDataTable(w http.ResponseWriter, req 
 		return
 	}
 
-	columns, data, err := controller.database.RetrieveDataFromTable(controller.ctx, tableModel)
+	columns, data, primaryKeys, foreignKeys, err := controller.database.RetrieveDataFromTable(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
 		controller.Response(w, http.StatusInternalServerError, err.Error())
@@ -104,8 +104,10 @@ func (controller *controllerModel) RetrieveDataTable(w http.ResponseWriter, req 
 	}
 
 	resultData := map[string]interface{}{
-		"columns": columns,
-		"rows":    data,
+		"columns":     columns,
+		"rows":        data,
+		"primaryKeys": primaryKeys,
+		"foreignKeys": foreignKeys,
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)

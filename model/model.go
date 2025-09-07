@@ -23,12 +23,22 @@ type (
 		Message string      `json:"message,omitempty"`
 	}
 
+	ForeignKey struct {
+		LocalColumn      string   `json:"localColumn"`
+		ReferencedTable  string   `json:"referencedTable"`
+		ReferencedColumn string   `json:"referencedColumn"`
+		CascadeDelete    bool     `json:"cascadeDelete"`
+		CascadeUpdate    bool     `json:"cascadeUpdate"`
+		DisplayColumns   []string `json:"displayColumns"`
+	}
+
 	CreateTableModel struct {
 		Description string            `json:"description,omitempty"`
 		DisplayName string            `json:"name"`
 		TableName   string            `json:"table_name"`
 		Columns     map[string]string `json:"columns"`
 		PrimaryKeys []string          `json:"primary_keys"`
+		ForeignKeys []*ForeignKey     `json:"foreign_keys,omitempty"`
 	}
 
 	InsertIntoTableModel struct {

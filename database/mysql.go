@@ -116,18 +116,18 @@ func (mysql *MySql) CreateNewProject(ctx context.Context, model *model.ProjectMo
 	}
 	return http.StatusCreated, nil
 }
-func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableModel) (int, error) {
+func (mysql *MySql) CreateTable(ctx context.Context, projectId int, createTableModel *model.CreateTableModel) (int, error) {
 	// Base query
-	query := fmt.Sprintf("CREATE TABLE %s", model.TableName)
+	query := fmt.Sprintf("CREATE TABLE %s", createTableModel.TableName)
 
 	// Start with auto-incrementing ID column
 	columnStmt := "`id` INT AUTO_INCREMENT"
-	if len(model.PrimaryKeys) > 0 {
+	if len(createTableModel.PrimaryKeys) > 0 {
 		columnStmt = ""
 	}
 
 	// Add additional columns
-	for columnName, columnType := range model.Columns {
+	for columnName, columnType := range createTableModel.Columns {
 		dataTypeMapping, err := MapDataType(columnType, common.MYSQL)
 		if err != nil {
 			return http.StatusInternalServerError, err
@@ -142,11 +142,12 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 
 	// Build primary key clause
 	var primaryKeyStmt string
-	if len(model.PrimaryKeys) == 0 {
+	if len(createTableModel.PrimaryKeys) == 0 {
 		// No primary key specified, use the default `id`
 		primaryKeyStmt = "`id`"
+		createTableModel.PrimaryKeys = []string{"id"}
 	} else {
-		for index, primaryKey := range model.PrimaryKeys {
+		for index, primaryKey := range createTableModel.PrimaryKeys {
 			if index > 0 {
 				primaryKeyStmt += ", "
 			}
@@ -154,9 +155,74 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 		}
 	}
 
-	// Finalize query
-	query = fmt.Sprintf("%s (%s, PRIMARY KEY (%s))", query, columnStmt, primaryKeyStmt)
+	// Process foreign keys
+	var foreignKeyStmt string
+	// Group foreign keys by referenced table
+	tableWiseForeignKey := make(map[string][]*model.ForeignKey)
+	for _, fk := range createTableModel.ForeignKeys {
+		tableWiseForeignKey[fk.ReferencedTable] = append(tableWiseForeignKey[fk.ReferencedTable], fk)
+	}
 
+	for tableName, foreignKeys := range tableWiseForeignKey {
+		if len(foreignKeys) > 1 {
+			// Multiple foreign keys to same table - create composite key
+			if foreignKeyStmt != "" {
+				foreignKeyStmt += ", "
+			}
+
+			localColumns := ""
+			referencedColumns := ""
+			for i, fk := range foreignKeys {
+				if i > 0 {
+					localColumns += ", "
+					referencedColumns += ", "
+				}
+				localColumns += fmt.Sprintf("`%s`", fk.LocalColumn)
+				referencedColumns += fmt.Sprintf("`%s`", fk.ReferencedColumn)
+			}
+
+			foreignKeyStmt += fmt.Sprintf("FOREIGN KEY (%s) REFERENCES `%s`(%s)",
+				localColumns,
+				fmt.Sprintf("%d_%s", projectId, tableName),
+				referencedColumns)
+
+			if foreignKeys[0].CascadeDelete {
+				foreignKeyStmt += " ON DELETE CASCADE"
+			}
+			if foreignKeys[0].CascadeUpdate {
+				foreignKeyStmt += " ON UPDATE CASCADE"
+			}
+		} else {
+			// Single foreign key
+			if foreignKeyStmt != "" {
+				foreignKeyStmt += ", "
+			}
+			fk := foreignKeys[0]
+			foreignKeyStmt += fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s`(`%s`)",
+				fk.LocalColumn,
+				fmt.Sprintf("%d_%s", projectId, tableName),
+				fk.ReferencedColumn)
+
+			if fk.CascadeDelete {
+				foreignKeyStmt += " ON DELETE CASCADE"
+			}
+			if fk.CascadeUpdate {
+				foreignKeyStmt += " ON UPDATE CASCADE"
+			}
+		}
+	}
+
+	// Combine all parts of the query
+	query += fmt.Sprintf(" (%s", columnStmt)
+	if primaryKeyStmt != "" {
+		query += fmt.Sprintf(", PRIMARY KEY (%s)", primaryKeyStmt)
+	}
+	if foreignKeyStmt != "" {
+		query += fmt.Sprintf(", %s", foreignKeyStmt)
+	}
+	query += ")"
+
+	// Execute the query
 	_, err := mysql.db.ExecContext(ctx, query)
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -164,7 +230,6 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 
 	return http.StatusCreated, nil
 }
-
 func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertIntoTableModel) error {
 	// Query Generation
 
@@ -302,35 +367,88 @@ func (mysql *MySql) RetrieveTableListFromMetaData(ctx context.Context, projectId
 	return tables, http.StatusOK, nil
 }
 
-func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, error) {
+func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, retrieveDataFromTableModel *model.RetrieveDataFromTableModel) ([]string, []map[string]interface{}, []string, []*model.ForeignKey, error) {
 	// Retrieve the table name
+	query := "SELECT TABLE_NAME, METADATA FROM project_metadata where project_id = ? and display_name = ?"
 
-	query := "SELECT TABLE_NAME FROM project_metadata where project_id = ? and display_name = ?"
+	var tableName, metaDataInfo string
+	var metaData *model.CreateTableModel
 
-	tableName := ""
-	row := mysql.db.QueryRowContext(ctx, query, model.ProjectId, model.DisplayName)
+	row := mysql.db.QueryRowContext(ctx, query, retrieveDataFromTableModel.ProjectId, retrieveDataFromTableModel.DisplayName)
 
-	if err := row.Scan(&tableName); err != nil {
-		return nil, nil, err
+	if err := row.Scan(&tableName, &metaDataInfo); err != nil {
+		return nil, nil, nil, nil, err
 	}
 
-	columns := []string{}
-	rowData := []map[string]interface{}{}
+	err := json.Unmarshal([]byte(metaDataInfo), &metaData)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 
-	query = fmt.Sprintf("SELECT * FROM %s", tableName)
+	var primaryKeys []string
+	if len(metaData.PrimaryKeys) == 0 {
+		primaryKeys = []string{"id"}
+	} else {
+		primaryKeys = metaData.PrimaryKeys
+	}
+
+	query = "SELECT * FROM " + tableName
+	if len(metaData.ForeignKeys) > 0 {
+		// Group foreign keys by referenced table
+		tableWiseForeignKey := make(map[string][]*model.ForeignKey)
+		for _, fk := range metaData.ForeignKeys {
+			tableWiseForeignKey[fk.ReferencedTable] = append(tableWiseForeignKey[fk.ReferencedTable], fk)
+		}
+
+		joins := []string{}
+		for referencedTable, foreignKeys := range tableWiseForeignKey {
+			if len(foreignKeys) > 1 {
+				// Multiple foreign keys to same table - handle as composite
+				onConditions := []string{}
+				for _, fk := range foreignKeys {
+					onConditions = append(onConditions, fmt.Sprintf("%s.%s = %s.%s",
+						tableName,
+						fk.LocalColumn,
+						fmt.Sprintf("%s_%s", retrieveDataFromTableModel.ProjectId, fk.ReferencedTable),
+						fk.ReferencedColumn))
+				}
+				join := fmt.Sprintf(" LEFT JOIN %s ON %s",
+					fmt.Sprintf("%s_%s", retrieveDataFromTableModel.ProjectId, referencedTable),
+					strings.Join(onConditions, " AND "))
+				joins = append(joins, join)
+			} else {
+				// Single foreign key
+				fk := foreignKeys[0]
+				join := fmt.Sprintf(" LEFT JOIN %s ON %s.%s = %s.%s",
+					fmt.Sprintf("%s_%s", retrieveDataFromTableModel.ProjectId, fk.ReferencedTable),
+					tableName,
+					fk.LocalColumn,
+					fmt.Sprintf("%s_%s", retrieveDataFromTableModel.ProjectId, fk.ReferencedTable),
+					fk.ReferencedColumn)
+				joins = append(joins, join)
+			}
+		}
+		query += strings.Join(joins, "")
+	}
+
+	fmt.Println(query)
 
 	rows, err := mysql.db.QueryContext(ctx, query)
 	if err != nil {
-		return columns, rowData, err
+		return nil, nil, nil, nil, err
 	}
 
-	columns, err = rows.Columns()
+	columns, err := rows.Columns()
 	if err != nil {
-		return columns, rowData, err
+		return nil, nil, nil, nil, err
 	}
+
 	results := []map[string]interface{}{}
 
 	defer rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, nil, nil, nil, err
+	}
 
 	for rows.Next() {
 		columnPointers := make([]interface{}, len(columns))
@@ -341,7 +459,7 @@ func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.Retr
 		}
 
 		if err := rows.Scan(columnPointers...); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		rowMap := make(map[string]interface{})
@@ -359,13 +477,8 @@ func (mysql *MySql) RetrieveDataFromTable(ctx context.Context, model *model.Retr
 		results = append(results, rowMap)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	return columns, results, nil
+	return columns, results, primaryKeys, metaData.ForeignKeys, nil
 }
-
 func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.DeleteEntryFromTableModel) error {
 	query := "SELECT TABLE_NAME FROM project_metadata where project_id = ? and display_name = ?"
 
