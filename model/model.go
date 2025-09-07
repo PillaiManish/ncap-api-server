@@ -37,9 +37,9 @@ type (
 	}
 
 	UpdateTableDataModel struct {
-		TableName string            `json:"table_name"`
-		Columns   map[string]string `json:"columns"`
-		Id        int               `json:"id"`
+		TableName  string            `json:"table_name"`
+		NewColumns map[string]string `json:"newColumns"`
+		OldColumns map[string]string `json:"oldColumns"`
 	}
 
 	DropTableModel struct {
@@ -56,9 +56,9 @@ type (
 	}
 
 	DeleteEntryFromTableModel struct {
-		ProjectId   string `json:"project_id"`
-		DisplayName string `json:"display_name"`
-		TableRowId  int    `json:"table_row_id"`
+		ProjectId   string            `json:"project_id"`
+		DisplayName string            `json:"display_name"`
+		Columns     map[string]string `json:"columns"`
 	}
 
 	ProjectAccessRequestModel struct {

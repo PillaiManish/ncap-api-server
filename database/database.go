@@ -47,7 +47,7 @@ func MapDataType(dataType, databaseType string) (string, error) {
 	case common.MYSQL:
 		switch dataType {
 		case "text":
-			return "text", nil
+			return "varchar(250)", nil
 		case "boolean":
 			return "tinyint(1)", nil
 		case "int":

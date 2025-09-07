@@ -122,6 +122,9 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 
 	// Start with auto-incrementing ID column
 	columnStmt := "`id` INT AUTO_INCREMENT"
+	if len(model.PrimaryKeys) > 0 {
+		columnStmt = ""
+	}
 
 	// Add additional columns
 	for columnName, columnType := range model.Columns {
@@ -130,7 +133,11 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 			return http.StatusInternalServerError, err
 		}
 
-		columnStmt += fmt.Sprintf(", `%s` %s", columnName, dataTypeMapping)
+		if columnStmt == "" {
+			columnStmt = fmt.Sprintf("`%s` %s", columnName, dataTypeMapping)
+		} else {
+			columnStmt += fmt.Sprintf(", `%s` %s", columnName, dataTypeMapping)
+		}
 	}
 
 	// Build primary key clause
@@ -163,7 +170,7 @@ func (mysql *MySql) InsertIntoTable(ctx context.Context, model *model.InsertInto
 
 	query := fmt.Sprintf("INSERT INTO %s", model.TableName)
 
-	// For Columns
+	// For NewColumns
 	var columnStmt string
 	var columnValueStmt string
 
@@ -196,16 +203,21 @@ func (mysql *MySql) UpdateTableData(ctx context.Context, model *model.UpdateTabl
 	query := fmt.Sprintf("UPDATE %s SET ", model.TableName)
 
 	var values []interface{}
-	var setStatements []string
+	var setStatements, whereStatements []string
 
-	for columnName, columnValue := range model.Columns {
+	for columnName, columnValue := range model.NewColumns {
 		setStatements = append(setStatements, fmt.Sprintf("%s = ?", columnName))
 		values = append(values, columnValue)
 	}
 
 	query += strings.Join(setStatements, ", ")
-	query += " WHERE id = ?"
-	values = append(values, model.Id)
+	query += " WHERE "
+
+	for columnName, columnValue := range model.OldColumns {
+		whereStatements = append(whereStatements, fmt.Sprintf("%s = ?", columnName))
+		values = append(values, columnValue)
+	}
+	query += strings.Join(whereStatements, " and ")
 
 	_, err := mysql.db.ExecContext(ctx, query, values...)
 	if err != nil {
@@ -358,9 +370,18 @@ func (mysql *MySql) DeleteEntryFromTable(ctx context.Context, model *model.Delet
 		return err
 	}
 
-	query = fmt.Sprintf("DELETE FROM %s WHERE id = ?", tableName)
+	query = fmt.Sprintf("DELETE FROM %s WHERE ", tableName)
 
-	_, err := mysql.db.ExecContext(ctx, query, model.TableRowId)
+	var whereStatements []string
+	var values []interface{}
+
+	for columnName, columnValue := range model.Columns {
+		whereStatements = append(whereStatements, fmt.Sprintf("%s = ?", columnName))
+		values = append(values, columnValue)
+	}
+	query += strings.Join(whereStatements, " and ")
+
+	_, err := mysql.db.ExecContext(ctx, query, values...)
 	if err != nil {
 		return err
 	}
