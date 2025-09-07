@@ -66,6 +66,7 @@ func (controller *controllerModel) CreateNewTable(w http.ResponseWriter, r *http
 		return
 	}
 
+	// TODO: do it as a transaction with above
 	statusCode, err = controller.database.InsertIntoMetaData(controller.ctx, tableModel, projectId)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())

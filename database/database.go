@@ -42,21 +42,23 @@ func NewDatabase(config *model.DatabaseConfig) (Database, error) {
 	}
 }
 
-func MapDataType(dataType, databaseType string) string {
+func MapDataType(dataType, databaseType string) (string, error) {
 	switch databaseType {
 	case common.MYSQL:
 		switch dataType {
 		case "text":
-			return "text"
+			return "text", nil
 		case "boolean":
-			return "tinyint(1)"
+			return "tinyint(1)", nil
 		case "int":
-			return "int"
+			return "int", nil
+		case "datetime":
+			return "DATETIME", nil
 		default:
-			return dataType
+			return "", fmt.Errorf("this datatype is not supported")
 		}
-
+	default:
+		return "", fmt.Errorf("database type %s not supported", databaseType)
 	}
 
-	return dataType
 }

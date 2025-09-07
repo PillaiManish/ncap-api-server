@@ -125,7 +125,12 @@ func (mysql *MySql) CreateTable(ctx context.Context, model *model.CreateTableMod
 
 	// Add additional columns
 	for columnName, columnType := range model.Columns {
-		columnStmt += fmt.Sprintf(", `%s` %s", columnName, MapDataType(columnType, common.MYSQL))
+		dataTypeMapping, err := MapDataType(columnType, common.MYSQL)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+
+		columnStmt += fmt.Sprintf(", `%s` %s", columnName, dataTypeMapping)
 	}
 
 	// Build primary key clause
