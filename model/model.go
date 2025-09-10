@@ -23,17 +23,33 @@ type (
 		Message string      `json:"message,omitempty"`
 	}
 
+	ForeignKey struct {
+		LocalColumn      string   `json:"localColumn"`
+		ReferencedTable  string   `json:"referencedTable"`
+		ReferencedColumn string   `json:"referencedColumn"`
+		CascadeDelete    bool     `json:"cascadeDelete"`
+		CascadeUpdate    bool     `json:"cascadeUpdate"`
+		DisplayColumns   []string `json:"displayColumns"`
+	}
+
 	CreateTableModel struct {
 		Description string            `json:"description,omitempty"`
 		DisplayName string            `json:"name"`
 		TableName   string            `json:"table_name"`
 		Columns     map[string]string `json:"columns"`
 		PrimaryKeys []string          `json:"primary_keys"`
+		ForeignKeys []*ForeignKey     `json:"foreign_keys,omitempty"`
 	}
 
 	InsertIntoTableModel struct {
 		TableName string            `json:"table_name"`
 		Columns   map[string]string `json:"columns"`
+	}
+
+	UpdateTableDataModel struct {
+		TableName  string            `json:"table_name"`
+		NewColumns map[string]string `json:"newColumns"`
+		OldColumns map[string]string `json:"oldColumns"`
 	}
 
 	DropTableModel struct {
@@ -50,9 +66,9 @@ type (
 	}
 
 	DeleteEntryFromTableModel struct {
-		ProjectId   string `json:"project_id"`
-		DisplayName string `json:"display_name"`
-		TableRowId  int    `json:"table_row_id"`
+		ProjectId   string            `json:"project_id"`
+		DisplayName string            `json:"display_name"`
+		Columns     map[string]string `json:"columns"`
 	}
 
 	ProjectAccessRequestModel struct {

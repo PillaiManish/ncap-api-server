@@ -32,6 +32,7 @@ type (
 		CreateNewTable(w http.ResponseWriter, req *http.Request)
 		DropTable(w http.ResponseWriter, req *http.Request)
 		RetrieveTableListFromMetaData(w http.ResponseWriter, req *http.Request)
+		UpdateTableData(w http.ResponseWriter, req *http.Request)
 
 		CreateNewProject(w http.ResponseWriter, req *http.Request)
 		EditProject(w http.ResponseWriter, req *http.Request)
