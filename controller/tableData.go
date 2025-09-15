@@ -47,15 +47,16 @@ func (controller *controllerModel) InsertIntoTable(w http.ResponseWriter, req *h
 		return
 	}
 
-	err = controller.database.InsertIntoTable(controller.ctx, tableModel)
+	statusCode, err := controller.database.InsertIntoTable(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, http.StatusInternalServerError, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, nil)
+	controller.Response(w, statusCode, nil)
 	return
 }
 
@@ -96,10 +97,11 @@ func (controller *controllerModel) RetrieveDataTable(w http.ResponseWriter, req 
 		return
 	}
 
-	columns, data, primaryKeys, foreignKeys, err := controller.database.RetrieveDataFromTable(controller.ctx, tableModel)
+	columns, data, primaryKeys, foreignKeys, statusCode, err := controller.database.RetrieveDataFromTable(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, http.StatusInternalServerError, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
@@ -111,7 +113,7 @@ func (controller *controllerModel) RetrieveDataTable(w http.ResponseWriter, req 
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, resultData)
+	controller.Response(w, statusCode, resultData)
 	return
 }
 
@@ -152,15 +154,16 @@ func (controller *controllerModel) DeleteEntryFromTable(w http.ResponseWriter, r
 		return
 	}
 
-	err = controller.database.DeleteEntryFromTable(controller.ctx, tableModel)
+	statusCode, err := controller.database.DeleteEntryFromTable(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, http.StatusInternalServerError, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, nil)
+	controller.Response(w, statusCode, nil)
 	return
 }
 
@@ -204,14 +207,15 @@ func (controller *controllerModel) UpdateTableData(w http.ResponseWriter, req *h
 
 	// TODO: add validation
 
-	err = controller.database.UpdateTableData(controller.ctx, tableModel)
+	statusCode, err := controller.database.UpdateTableData(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, http.StatusInternalServerError, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, nil)
+	controller.Response(w, statusCode, nil)
 	return
 }

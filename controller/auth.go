@@ -33,7 +33,8 @@ func (controller *controllerModel) Login(w http.ResponseWriter, r *http.Request)
 	userModel, statusCode, err := controller.database.LoginUser(controller.ctx, checkUser)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, statusCode, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
@@ -45,7 +46,7 @@ func (controller *controllerModel) Login(w http.ResponseWriter, r *http.Request)
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, token)
+	controller.Response(w, statusCode, token)
 	return
 }
 
@@ -79,10 +80,11 @@ func (controller *controllerModel) Register(w http.ResponseWriter, r *http.Reque
 
 	newUser.Password = string(encryptPasswd)
 
-	userId, statusCode, err := controller.database.RegisterUser(controller.ctx, newUser)
+	userId, _, err := controller.database.RegisterUser(controller.ctx, newUser)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, statusCode, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
