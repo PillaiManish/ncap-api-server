@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
@@ -124,6 +125,28 @@ func (controller *controllerModel) Response(w http.ResponseWriter, code int, pay
 		resultStatus.Message = "Processed successfully"
 		resultStatus.Data = payload
 		w.WriteHeader(http.StatusCreated)
+	case http.StatusForbidden:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusForbidden
+		resultStatus.Message = "Forbidden"
+		if controller.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusForbidden)
+	case http.StatusServiceUnavailable:
+		resultStatus.Status = common.FAILED
+		resultStatus.StatusCode = http.StatusServiceUnavailable
+		resultStatus.Message = "Service unavailable"
+		if controller.config.ErrorDataResponse {
+			resultStatus.Data = payload
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	case http.StatusAccepted:
+		resultStatus.Status = common.SUCCESS
+		resultStatus.StatusCode = http.StatusAccepted
+		resultStatus.Message = "Request accepted"
+		resultStatus.Data = payload
+		w.WriteHeader(http.StatusAccepted)
 	default:
 		resultStatus.Status = common.FAILED
 		resultStatus.StatusCode = http.StatusInternalServerError
@@ -205,6 +228,16 @@ func (controller *controllerModel) createTableNameFromName(displayName string, p
 	tableName = strings.ReplaceAll(tableName, " ", "_")
 
 	return fmt.Sprintf("%v_%s", projectId, tableName)
+}
+
+// handleDatabaseError processes database errors and returns appropriate status code and message
+func (controller *controllerModel) handleDatabaseError(err error) (int, string) {
+	var dbErr *database.DatabaseError
+	if errors.As(err, &dbErr) {
+		return dbErr.StatusCode, dbErr.Message
+	}
+	// Fallback for non-DatabaseError types
+	return http.StatusInternalServerError, "Internal server error"
 }
 
 func (controller *controllerModel) Stop() {

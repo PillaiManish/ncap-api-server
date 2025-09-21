@@ -59,18 +59,20 @@ func (controller *controllerModel) CreateNewTable(w http.ResponseWriter, r *http
 		return
 	}
 
-	statusCode, err := controller.database.CreateTable(controller.ctx, projectId, tableModel)
+	_, err = controller.database.CreateTable(controller.ctx, projectId, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, statusCode, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	// TODO: do it as a transaction with above
-	statusCode, err = controller.database.InsertIntoMetaData(controller.ctx, tableModel, projectId)
+	_, err = controller.database.InsertIntoMetaData(controller.ctx, tableModel, projectId)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, statusCode, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
@@ -119,15 +121,16 @@ func (controller *controllerModel) DropTable(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	err = controller.database.DropTable(controller.ctx, tableModel)
+	statusCode, err := controller.database.DropTable(controller.ctx, tableModel)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, http.StatusInternalServerError, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, nil)
+	controller.Response(w, statusCode, nil)
 	return
 }
 
@@ -178,11 +181,12 @@ func (controller *controllerModel) RetrieveTableListFromMetaData(w http.Response
 	tableList, statusCode, err := controller.database.RetrieveTableListFromMetaData(controller.ctx, retrieveTableListModel.ProjectId)
 	if err != nil {
 		controller.logger.Errorf("%s: failed due to err: %s", endpointName, err.Error())
-		controller.Response(w, statusCode, err.Error())
+		httpCode, message := controller.handleDatabaseError(err)
+		controller.Response(w, httpCode, message)
 		return
 	}
 
 	controller.logger.Debugf("%s: successfully processed", endpointName)
-	controller.Response(w, http.StatusOK, tableList)
+	controller.Response(w, statusCode, tableList)
 	return
 }
